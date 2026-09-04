@@ -1,9 +1,9 @@
-package com.sih.landslide.ui.home
+package com.example.landguard.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.sih.landslide.data.repository.AlertRepository
-import com.sih.landslide.domain.model.Alert
+import com.example.landguard.data.repository.AlertRepository
+import example.landguard.domain.model.Alert
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

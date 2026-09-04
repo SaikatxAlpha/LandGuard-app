@@ -1,4 +1,4 @@
-package com.sih.landslide.ui.auth
+package com.example.landguard.ui.auth
 
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel

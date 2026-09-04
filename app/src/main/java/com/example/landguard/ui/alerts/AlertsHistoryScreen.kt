@@ -1,5 +1,6 @@
-package com.sih.landslide.ui.alerts
+package com.example.landguard.ui.alerts
 
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn

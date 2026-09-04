@@ -1,4 +1,4 @@
-package com.sih.landslide.ui.auth
+package com.example.landguard.ui.auth
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
