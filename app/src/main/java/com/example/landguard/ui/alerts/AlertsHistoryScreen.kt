@@ -1,7 +1,8 @@
 package com.example.landguard.ui.alerts
 
-import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +13,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -25,11 +27,14 @@ fun AlertHistoryScreen(
 
     Scaffold(topBar = { TopAppBar(title = { Text("Notification History") }) }) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-            items(alerts) { alert ->
+            items(alerts, key = { it.id }) { alert ->
                 ListItem(
                     headlineContent = { Text(alert.title) },
                     supportingContent = { Text("${alert.severity} • ${alert.createdAt}") },
-                    modifier = Modifier.padding(4.dp = androidx.compose.ui.unit.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .clickable { onOpenAlert(alert.id) }
                 )
             }
         }

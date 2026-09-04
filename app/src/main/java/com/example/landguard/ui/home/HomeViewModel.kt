@@ -3,7 +3,7 @@ package com.example.landguard.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.landguard.data.repository.AlertRepository
-import example.landguard.domain.model.Alert
+import com.example.landguard.domain.model.Alert
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,8 +42,6 @@ class HomeViewModel @Inject constructor(
                     )
                 }
                 .onFailure { throwable ->
-                    // Network unavailable: fall back to cached state and surface staleness,
-                    // per the platform's offline/degraded-mode rules.
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isOffline = true,
