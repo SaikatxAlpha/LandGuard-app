@@ -19,6 +19,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun OnboardingScreen(
     onVerified: () -> Unit,
+    @Suppress("UNUSED_PARAMETER")
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
     var phoneNumber by remember { mutableStateOf("") }

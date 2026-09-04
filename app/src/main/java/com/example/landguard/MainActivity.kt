@@ -10,6 +10,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -38,14 +39,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             LandGuardTheme {
-                LandGuardApp()
+                LandGuardNavGraph()
             }
         }
     }
 }
 
 @Composable
-fun LandGuardApp(navController: NavHostController = rememberNavController()) {
+fun LandGuardNavGraph(navController: NavHostController = rememberNavController()) {
     NavHost(navController = navController, startDestination = Routes.ONBOARDING) {
 
         composable(Routes.ONBOARDING) {
@@ -87,6 +88,11 @@ fun LandGuardApp(navController: NavHostController = rememberNavController()) {
 @Composable
 private fun PlaceholderScreen(title: String) {
     Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
-        Text(text = "$title — coming soon", modifier = Modifier.padding(padding).padding(16.dp = androidx.compose.ui.unit.dp))
+        Text(
+            text = "$title — coming soon",
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp)
+        )
     }
 }

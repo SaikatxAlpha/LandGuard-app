@@ -1,6 +1,7 @@
 package com.example.landguard.ui.home
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -9,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -25,6 +27,7 @@ import com.example.landguard.domain.model.Alert
  * This is the app's default landing screen after onboarding.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun HomeScreen(
     onOpenAlert: (String) -> Unit,
     onOpenMap: () -> Unit,
@@ -75,6 +78,7 @@ private fun AlertList(alerts: List<Alert>, onOpenAlert: (String) -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(vertical = 4.dp)
+                    .clickable { onOpenAlert(alert.id) }
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(text = alert.title)
