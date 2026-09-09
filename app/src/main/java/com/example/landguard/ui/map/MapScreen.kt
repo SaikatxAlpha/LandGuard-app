@@ -79,18 +79,21 @@ import com.example.landguard.domain.model.SatelliteApiConfig
 import com.example.landguard.domain.model.SatelliteLayer
 import com.example.landguard.domain.model.SatelliteSource
 import com.example.landguard.domain.model.Severity
-import com.example.landguard.ui.theme.CoreBackground
-import com.example.landguard.ui.theme.CyberBlue
-import com.example.landguard.ui.theme.CyberCyan
-import com.example.landguard.ui.theme.CyberGreen
-import com.example.landguard.ui.theme.CyberOrange
-import com.example.landguard.ui.theme.CyberRed
-import com.example.landguard.ui.theme.GlassBackground
-import com.example.landguard.ui.theme.GlassBorder
-import com.example.landguard.ui.theme.SurfaceDark
+import com.example.landguard.ui.theme.BorderSubtle
+import com.example.landguard.ui.theme.CardSurface
+import com.example.landguard.ui.theme.ForestDark
+import com.example.landguard.ui.theme.ForestPrimary
+import com.example.landguard.ui.theme.LightBackground
+import com.example.landguard.ui.theme.RiskCriticalRed
+import com.example.landguard.ui.theme.RiskLowGreen
+import com.example.landguard.ui.theme.RiskModerateYellow
+import com.example.landguard.ui.theme.RiskWarningAmber
+import com.example.landguard.ui.theme.SatelliteSky
+import com.example.landguard.ui.theme.SatelliteSkyContainer
+import com.example.landguard.ui.theme.SoftMint
+import com.example.landguard.ui.theme.SoftMintContainer
+import com.example.landguard.ui.theme.TextCharcoal
 import com.example.landguard.ui.theme.TextMuted
-import com.example.landguard.ui.theme.TextPrimary
-import com.example.landguard.ui.theme.TextSecondary
 
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -187,10 +190,10 @@ fun MapScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(CoreBackground)) {
+    Box(modifier = Modifier.fillMaxSize().background(LightBackground)) {
         if (state.isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = CyberCyan)
+                CircularProgressIndicator(color = ForestPrimary)
             }
         } else {
             // 1. MapLibre Native Layer
@@ -204,7 +207,7 @@ fun MapScreen(
                 val styleUrl = when (selectedMapType) {
                     MapStyleType.TERRAIN -> "https://tiles.openfreemap.org/styles/fiord-color"
                     MapStyleType.NORMAL -> "https://tiles.openfreemap.org/styles/positron"
-                    else -> "https://tiles.openfreemap.org/styles/liberty" // Liberty serves as our base hybrid/satellite equivalent
+                    else -> "https://tiles.openfreemap.org/styles/liberty"
                 }
                 mapView.getMapAsync { maplibreMap ->
                     maplibreMap.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
@@ -277,17 +280,17 @@ private fun getRiskColorHex(severity: Severity, source: SatelliteSource): String
     if (source == SatelliteSource.SENTINEL2_MSI) {
         return when (severity) {
             Severity.CRITICAL -> "#D97706"
-            Severity.HIGH -> "#FF9100"
-            Severity.MODERATE -> "#84CC16"
-            Severity.LOW -> "#00E676"
+            Severity.HIGH -> "#EA580C"
+            Severity.MODERATE -> "#16A34A"
+            Severity.LOW -> "#22C55E"
         }
     }
     
     return when (severity) {
-        Severity.CRITICAL -> "#FF2A55"
-        Severity.HIGH -> "#FF9100"
-        Severity.MODERATE -> "#00F0FF"
-        Severity.LOW -> "#00E676"
+        Severity.CRITICAL -> "#DC2626"
+        Severity.HIGH -> "#D97706"
+        Severity.MODERATE -> "#0284C7"
+        Severity.LOW -> "#16A34A"
     }
 }
 
@@ -353,7 +356,7 @@ private fun setupMapLayers(
         ))
         style.addLayer(LineLayer("core-stroke-layer", "core-source").withProperties(
             PropertyFactory.lineColor("rgba(255, 255, 255, 0.9)"),
-            PropertyFactory.lineWidth(4f)
+            PropertyFactory.lineWidth(3f)
         ))
     }
     coreSource.setGeoJson(FeatureCollection.fromFeatures(coreFeatures))
@@ -374,9 +377,10 @@ private fun MapGlassControlPanel(
     var expanded by remember { mutableStateOf(false) }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = GlassBackground),
-        shape = RoundedCornerShape(22.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+        elevation = CardDefaults.cardElevation(2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -386,29 +390,29 @@ private fun MapGlassControlPanel(
                     modifier = Modifier
                         .size(34.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(CyberCyan.copy(alpha = 0.2f)),
+                        .background(SoftMint),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Radar,
                         contentDescription = null,
-                        tint = CyberCyan,
+                        tint = ForestPrimary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("SATELLITE TARGETING", color = CyberCyan, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                    Text("Earth Observation Array", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("LAND RISK MAP", color = ForestPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Text("Land Parcels & Satellite Insights", color = TextCharcoal, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
                 IconButton(onClick = onApiClick, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Filled.Api, contentDescription = "API Config", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Api, contentDescription = "API Config", tint = TextMuted, modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.Close else Icons.Filled.KeyboardArrowDown,
                         contentDescription = "Expand",
-                        tint = TextPrimary,
+                        tint = TextCharcoal,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -422,26 +426,26 @@ private fun MapGlassControlPanel(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.Map, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Map, contentDescription = null, tint = ForestPrimary, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("BASE MAP", color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text("BASE MAP", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     Spacer(modifier = Modifier.weight(1f))
                     
                     listOf(
-                        "HYBRID" to MapStyleType.HYBRID,
-                        "NORMAL" to MapStyleType.NORMAL,
-                        "TERRAIN" to MapStyleType.TERRAIN
+                        "LIBERTY" to MapStyleType.HYBRID,
+                        "POSITRON" to MapStyleType.NORMAL,
+                        "FIORD" to MapStyleType.TERRAIN
                     ).forEach { (label, type) ->
                         val isSel = selectedMapType == type
                         Box(
                             modifier = Modifier
                                 .padding(start = 4.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSel) CyberCyan else SurfaceDark)
+                                .background(if (isSel) ForestPrimary else SoftMintContainer)
                                 .clickable { onMapTypeSelected(type) }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Text(label, color = if (isSel) CoreBackground else TextSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(label, color = if (isSel) Color.White else TextCharcoal, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -458,23 +462,23 @@ private fun MapGlassControlPanel(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(50.dp)
+                                .height(46.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) CyberBlue.copy(alpha = 0.25f) else SurfaceDark.copy(alpha = 0.6f))
-                                .border(1.dp, if (isSelected) CyberCyan else GlassBorder, RoundedCornerShape(12.dp))
+                                .background(if (isSelected) SoftMint else SoftMintContainer)
+                                .border(1.dp, if (isSelected) ForestPrimary else BorderSubtle, RoundedCornerShape(12.dp))
                                 .clickable { onSourceSelected(source) },
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
                                     text = source.displayName.split(" ")[0],
-                                    color = if (isSelected) CyberCyan else TextSecondary,
+                                    color = if (isSelected) ForestDark else TextCharcoal,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     text = if (source == SatelliteSource.ALOS4_PALSAR3) "L-SAR" else if (source == SatelliteSource.SENTINEL2_MSI) "Optical" else "Fusion",
-                                    color = if (isSelected) TextPrimary else TextMuted,
+                                    color = if (isSelected) ForestPrimary else TextMuted,
                                     fontSize = 8.sp
                                 )
                             }
@@ -502,14 +506,14 @@ private fun MapGlassControlPanel(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(if (isSelected) CyberCyan else Color.Transparent)
-                                .border(1.dp, if (isSelected) CyberCyan else GlassBorder, RoundedCornerShape(14.dp))
+                                .background(if (isSelected) ForestPrimary else SoftMintContainer)
+                                .border(1.dp, if (isSelected) ForestPrimary else BorderSubtle, RoundedCornerShape(14.dp))
                                 .clickable { onLayerSelected(layer) }
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = layer.title,
-                                color = if (isSelected) CoreBackground else TextPrimary,
+                                color = if (isSelected) Color.White else TextCharcoal,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -521,7 +525,7 @@ private fun MapGlassControlPanel(
 
                 // Opacity Slider
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("OPACITY", color = TextSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text("OPACITY", color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     Spacer(modifier = Modifier.width(8.dp))
                     Slider(
                         value = opacity,
@@ -529,9 +533,9 @@ private fun MapGlassControlPanel(
                         valueRange = 0.1f..1.0f,
                         modifier = Modifier.weight(1f),
                         colors = SliderDefaults.colors(
-                            thumbColor = CyberCyan,
-                            activeTrackColor = CyberBlue,
-                            inactiveTrackColor = SurfaceDark
+                            thumbColor = ForestPrimary,
+                            activeTrackColor = ForestPrimary,
+                            inactiveTrackColor = BorderSubtle
                         )
                     )
                 }
@@ -547,19 +551,20 @@ private fun CyberTelemetryCard(
     onAnalyze: () -> Unit
 ) {
     val accentColor = when (point.riskSeverity) {
-        Severity.CRITICAL -> CyberRed
-        Severity.HIGH -> CyberOrange
-        Severity.MODERATE -> CyberCyan
-        Severity.LOW -> CyberGreen
+        Severity.CRITICAL -> RiskCriticalRed
+        Severity.HIGH -> RiskWarningAmber
+        Severity.MODERATE -> SatelliteSky
+        Severity.LOW -> RiskLowGreen
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        colors = CardDefaults.cardColors(containerColor = GlassBackground),
-        shape = RoundedCornerShape(22.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header
@@ -568,33 +573,32 @@ private fun CyberTelemetryCard(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(accentColor.copy(alpha = 0.15f))
-                        .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
+                        .background(accentColor.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.Radar, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("TARGET ACQUIRED", color = accentColor, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                    Text(point.label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("LAT: ${point.latitude} | LON: ${point.longitude}", color = TextSecondary, fontSize = 10.sp)
+                    Text("PARCEL ACQUIRED", color = accentColor, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Text(point.label, color = TextCharcoal, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("LAT: ${point.latitude} | LON: ${point.longitude}", color = TextMuted, fontSize = 10.sp)
                 }
                 IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = TextPrimary, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = TextCharcoal, modifier = Modifier.size(18.dp))
                 }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Telemetry Grid (Equal width weights, maxLines = 1 to prevent text overflow/wrapping)
+            // Telemetry Grid
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                TelemetryCell("INSAR SHIFT", "${point.displacementRateMmPerYear} mm", Icons.Filled.Speed, CyberRed, modifier = Modifier.weight(1f))
-                TelemetryCell("NDVI SCAR", "${point.ndviScore}", Icons.Filled.Landscape, CyberGreen, modifier = Modifier.weight(1f))
-                TelemetryCell("SATURATION", "${point.soilMoisturePercentage}%", Icons.Filled.Waves, CyberBlue, modifier = Modifier.weight(1f))
+                TelemetryCell("INSAR SHIFT", "${point.displacementRateMmPerYear} mm", Icons.Filled.Speed, RiskCriticalRed, modifier = Modifier.weight(1f))
+                TelemetryCell("NDVI SCAR", "${point.ndviScore}", Icons.Filled.Landscape, RiskLowGreen, modifier = Modifier.weight(1f))
+                TelemetryCell("SATURATION", "${point.soilMoisturePercentage}%", Icons.Filled.Waves, SatelliteSky, modifier = Modifier.weight(1f))
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -604,13 +608,12 @@ private fun CyberTelemetryCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(46.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = accentColor.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
+                colors = ButtonDefaults.buttonColors(containerColor = ForestPrimary),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Filled.Analytics, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.Analytics, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("RUN DEEP ANALYSIS", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
+                Text("RUN DEEP ANALYSIS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
             }
         }
     }
@@ -627,8 +630,8 @@ private fun TelemetryCell(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(SurfaceDark.copy(alpha = 0.6f))
-            .border(1.dp, GlassBorder, RoundedCornerShape(12.dp))
+            .background(SoftMintContainer)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
             .padding(horizontal = 6.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -636,7 +639,7 @@ private fun TelemetryCell(
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = value,
-            color = TextPrimary,
+            color = TextCharcoal,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1
@@ -644,7 +647,7 @@ private fun TelemetryCell(
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = title,
-            color = TextSecondary,
+            color = TextMuted,
             fontSize = 8.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.2.sp,
@@ -668,12 +671,12 @@ private fun SatelliteApiGuideDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = SurfaceDark,
+        containerColor = CardSurface,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Api, null, tint = CyberCyan)
+                Icon(Icons.Filled.Api, null, tint = ForestPrimary)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("SATELLITE UPLINK CONFIG", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary, letterSpacing = 1.sp)
+                Text("BACKEND UPLINK CONFIG", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextCharcoal, letterSpacing = 1.sp)
             }
         },
         text = {
@@ -683,7 +686,7 @@ private fun SatelliteApiGuideDialog(
                     .padding(vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Configure your direct secure lines to ESA Copernicus and JAXA.", color = TextSecondary, fontSize = 12.sp)
+                Text("Configure your secure backend gateways to ESA Copernicus and JAXA.", color = TextMuted, fontSize = 12.sp)
 
                 CyberTextField(value = copernicusId, onValueChange = { copernicusId = it }, label = "Backend Endpoint URL")
                 CyberTextField(value = copernicusSecret, onValueChange = { copernicusSecret = it }, label = "Gateway Target")
@@ -704,14 +707,14 @@ private fun SatelliteApiGuideDialog(
                         )
                     )
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = CyberCyan)
+                colors = ButtonDefaults.buttonColors(containerColor = ForestPrimary)
             ) {
-                Text("ESTABLISH LINK", color = CoreBackground, fontWeight = FontWeight.Bold)
+                Text("ESTABLISH LINK", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("ABORT", color = TextSecondary)
+                Text("ABORT", color = TextMuted)
             }
         }
     )
@@ -726,11 +729,11 @@ private fun CyberTextField(value: String, onValueChange: (String) -> Unit, label
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = CyberCyan,
-            unfocusedBorderColor = GlassBorder,
-            focusedTextColor = TextPrimary,
-            unfocusedTextColor = TextPrimary,
-            cursorColor = CyberCyan
+            focusedBorderColor = ForestPrimary,
+            unfocusedBorderColor = BorderSubtle,
+            focusedTextColor = TextCharcoal,
+            unfocusedTextColor = TextCharcoal,
+            cursorColor = ForestPrimary
         )
     )
 }

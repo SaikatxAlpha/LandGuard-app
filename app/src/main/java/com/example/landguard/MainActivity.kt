@@ -10,7 +10,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,13 +24,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Api
-import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Info
@@ -40,17 +37,16 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Radar
-import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -68,13 +64,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.landguard.ui.home.HomeScreen
 import com.example.landguard.ui.map.MapScreen
 import com.example.landguard.ui.theme.*
 import dagger.hilt.android.AndroidEntryPoint
@@ -82,10 +78,10 @@ import kotlinx.coroutines.launch
 
 private data class AlertItem(val title: String, val area: String, val time: String, val severity: String, val score: Int)
 private enum class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    HOME("DASH", Icons.Filled.Analytics),
-    MAP("SAT-MAP", Icons.Filled.Radar),
-    ALERTS("ALERTS", Icons.Filled.Warning),
-    PROFILE("SYS", Icons.Filled.Settings)
+    HOME("Overview", Icons.Filled.Analytics),
+    MAP("Risk Map", Icons.Filled.Radar),
+    ALERTS("Alerts", Icons.Filled.Warning),
+    PROFILE("Settings", Icons.Filled.Settings)
 }
 
 @AndroidEntryPoint
@@ -102,7 +98,6 @@ private fun LandGuardAppUI() {
     var tab by remember { mutableStateOf(Tab.HOME) }
     var showLocationSheet by remember { mutableStateOf(false) }
     var selectedAlert by remember { mutableStateOf<AlertItem?>(null) }
-    var demoRefresh by remember { mutableIntStateOf(0) }
     var notifications by remember { mutableStateOf(true) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -113,7 +108,7 @@ private fun LandGuardAppUI() {
     }
 
     Scaffold(
-        containerColor = CoreBackground,
+        containerColor = LightBackground,
         topBar = {
             if (tab != Tab.MAP) {
                 Row(
@@ -122,18 +117,18 @@ private fun LandGuardAppUI() {
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(CyberCyan.copy(alpha=0.15f)).border(1.dp, CyberCyan.copy(alpha=0.5f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Landscape, null, tint = CyberCyan)
+                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(SoftMint), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Landscape, null, tint = ForestPrimary)
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("LANDGUARD", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = TextPrimary, letterSpacing = 1.sp)
-                        Text("ALOS-4 & SENTINEL-2 RISK ENGINE", fontSize = 9.sp, letterSpacing = 1.5.sp, color = CyberBlue, fontWeight = FontWeight.Bold)
+                        Text("LandGuard", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextCharcoal)
+                        Text("INTELLIGENT LAND RISK PLATFORM", fontSize = 9.sp, letterSpacing = 1.2.sp, color = ForestPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    BadgedBox(badge = { if (notifications) Badge(containerColor = CyberRed) { Text("3", color = Color.White) } }) {
-                        IconButton(onClick = { tab = Tab.ALERTS }) { Icon(Icons.Filled.Notifications, "Alerts", tint = TextPrimary) }
+                    BadgedBox(badge = { if (notifications) Badge(containerColor = RiskCriticalRed) { Text("3", color = Color.White) } }) {
+                        IconButton(onClick = { tab = Tab.ALERTS }) { Icon(Icons.Filled.Notifications, "Alerts", tint = TextCharcoal) }
                     }
-                    IconButton(onClick = { showLocationSheet = true }) { Icon(Icons.Filled.GpsFixed, "Location", tint = CyberCyan) }
+                    IconButton(onClick = { showLocationSheet = true }) { Icon(Icons.Filled.GpsFixed, "Location", tint = ForestPrimary) }
                 }
             }
         },
@@ -143,10 +138,20 @@ private fun LandGuardAppUI() {
             
             // Main Content
             when (tab) {
-                Tab.HOME -> HomeScreen(onOpenMap = { tab = Tab.MAP }, onAlert = { selectedAlert = it }, refreshToken = demoRefresh)
+                Tab.HOME -> HomeScreen(
+                    onOpenAlert = { id -> scope.launch { snackbar.showSnackbar("Alert $id opened") } },
+                    onOpenMap = { tab = Tab.MAP },
+                    onOpenAlertHistory = { tab = Tab.ALERTS },
+                    onOpenProfile = { tab = Tab.PROFILE }
+                )
                 Tab.MAP -> MapScreen(onOpenZone = { tab = Tab.HOME })
                 Tab.ALERTS -> AlertsScreen(onAlert = { selectedAlert = it })
-                Tab.PROFILE -> ProfileScreen(notifications, { notifications = it }, { locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) }, onOpenSatelliteApi = { tab = Tab.MAP })
+                Tab.PROFILE -> ProfileScreen(
+                    notifications = notifications,
+                    onNotifications = { notifications = it },
+                    requestLocation = { locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) },
+                    onOpenSatelliteApi = { tab = Tab.MAP }
+                )
             }
 
             // Custom Floating Equal-Weight Navigation Bar
@@ -156,10 +161,10 @@ private fun LandGuardAppUI() {
                     .navigationBarsPadding()
                     .padding(bottom = 16.dp)
                     .fillMaxWidth(0.92f)
-                    .height(60.dp)
+                    .height(62.dp)
                     .clip(RoundedCornerShape(30.dp))
-                    .background(GlassBackground)
-                    .border(1.dp, GlassBorder, RoundedCornerShape(30.dp)),
+                    .background(CardSurface)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(30.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -174,8 +179,7 @@ private fun LandGuardAppUI() {
                                 .weight(1f)
                                 .height(48.dp)
                                 .clip(RoundedCornerShape(24.dp))
-                                .background(if (isSelected) CyberCyan.copy(alpha = 0.2f) else Color.Transparent)
-                                .border(if (isSelected) 1.dp else 0.dp, if (isSelected) CyberCyan.copy(alpha = 0.5f) else Color.Transparent, RoundedCornerShape(24.dp))
+                                .background(if (isSelected) SoftMint else Color.Transparent)
                                 .clickable { tab = item },
                             contentAlignment = Alignment.Center
                         ) {
@@ -186,17 +190,16 @@ private fun LandGuardAppUI() {
                                 Icon(
                                     imageVector = item.icon,
                                     contentDescription = item.label,
-                                    tint = if (isSelected) CyberCyan else TextSecondary,
+                                    tint = if (isSelected) ForestPrimary else TextMuted,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 if (isSelected) {
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = item.label,
-                                        color = CyberCyan,
-                                        fontSize = 10.sp,
+                                        color = ForestDark,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp,
                                         maxLines = 1
                                     )
                                 }
@@ -212,37 +215,38 @@ private fun LandGuardAppUI() {
         ModalBottomSheet(
             onDismissRequest = { showLocationSheet = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = SurfaceDark
+            containerColor = CardSurface
         ) {
             Column(Modifier.padding(24.dp).padding(bottom = 24.dp)) {
-                Text("ACQUIRE TARGET ZONE", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary, letterSpacing = 1.sp)
-                Spacer(Modifier.height(8.dp))
-                Text("Select a region to calibrate ALOS-4 SAR and Sentinel-2 optical telemetry feeds.", color = TextSecondary, fontSize = 13.sp)
-                Spacer(Modifier.height(24.dp))
+                Text("Select Monitored Location", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextCharcoal)
+                Spacer(Modifier.height(4.dp))
+                Text("Target regional coordinates for land risk and satellite observation analysis.", color = TextMuted, fontSize = 12.sp)
+                Spacer(Modifier.height(20.dp))
                 Button(
                     onClick = { showLocationSheet = false; locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CyberBlue)
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ForestPrimary),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Filled.GpsFixed, null, tint = Color.White)
                     Spacer(Modifier.width(8.dp))
-                    Text("USE DEVICE GPS", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text("USE DEVICE GPS", fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(16.dp))
-                listOf("Siliguri / Darjeeling Corridor", "Sikkim Himalayan Belt", "Kalimpong - Teesta Gorge").forEach { place ->
+                listOf("Kalimpong Ridge, West Bengal", "Teesta River Gorge, Sikkim", "Siliguri Bypass Basin").forEach { place ->
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(SurfaceLight)
-                            .border(1.dp, GlassBorder, RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SoftMintContainer)
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                             .clickable { showLocationSheet = false; scope.launch { snackbar.showSnackbar("Target locked: $place") } }
-                            .padding(16.dp)
+                            .padding(14.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(place, color = TextPrimary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            Icon(Icons.Filled.ChevronRight, null, tint = CyberCyan)
+                            Text(place, color = TextCharcoal, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            Icon(Icons.Filled.ChevronRight, null, tint = ForestPrimary)
                         }
                     }
                 }
@@ -253,33 +257,33 @@ private fun LandGuardAppUI() {
     selectedAlert?.let { alert ->
         AlertDialog(
             onDismissRequest = { selectedAlert = null },
-            containerColor = SurfaceDark,
+            containerColor = CardSurface,
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Warning, null, tint = CyberRed)
+                    Icon(Icons.Filled.Warning, null, tint = RiskCriticalRed)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("CRITICAL ANOMALY", color = CyberRed, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text("LAND RISK ALERT", color = RiskCriticalRed, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
             },
             text = {
                 Column {
-                    Text(alert.title, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                    Spacer(Modifier.height(8.dp))
-                    Text(alert.area, color = TextSecondary, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(16.dp))
-                    Text("RISK CONFIDENCE: ${alert.score}%", color = CyberCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(progress = { alert.score / 100f }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape), color = CyberRed, trackColor = SurfaceLight)
+                    Text(alert.title, color = TextCharcoal, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(alert.area, color = TextMuted, fontSize = 12.sp)
+                    Spacer(Modifier.height(14.dp))
+                    Text("RISK CONFIDENCE: ${alert.score}%", color = ForestPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(progress = { alert.score / 100f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape), color = RiskCriticalRed, trackColor = BorderSubtle)
                 }
             },
             confirmButton = {
-                Button(onClick = { selectedAlert = null; scope.launch { snackbar.showSnackbar("Alert suppressed") } }, colors = ButtonDefaults.buttonColors(containerColor = CyberRed)) {
+                Button(onClick = { selectedAlert = null; scope.launch { snackbar.showSnackbar("Alert acknowledged") } }, colors = ButtonDefaults.buttonColors(containerColor = ForestPrimary)) {
                     Text("ACKNOWLEDGE", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { selectedAlert = null }) {
-                    Text("CLOSE", color = TextSecondary)
+                    Text("CLOSE", color = TextMuted)
                 }
             }
         )
@@ -287,144 +291,24 @@ private fun LandGuardAppUI() {
 }
 
 @Composable
-private fun HomeScreen(onOpenMap: () -> Unit, onAlert: (AlertItem) -> Unit, refreshToken: Int) {
-    val alerts = remember(refreshToken) { listOf(
-        AlertItem("ALOS-4 InSAR Slope Shift", "Kalimpong Sector 04 (-28.4mm/y)", "8 min ago", "HIGH", 92),
-        AlertItem("Sentinel-2 NDVI Collapse", "Teesta River Gorge (NDVI: 0.22)", "15 min ago", "HIGH", 89)
-    ) }
-    LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        item {
-            Text("SYSTEM STATUS", color = CyberGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-            Text("ORBITAL FEEDS ACTIVE", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-        }
-        item { RiskHeroCard(92, onOpenMap) }
-        item { SectionTitle("LIVE TELEMETRY") }
-        item { ConditionsRow() }
-        item { SectionTitle("ANOMALY LOGS") }
-        items(alerts) { alert -> AlertCard(alert, { onAlert(alert) }) }
-        item { SectionTitle("RISK VECTORS") }
-        item { RiskDrivers() }
-        item { Spacer(Modifier.height(100.dp)) }
-    }
-}
-
-@Composable
-private fun RiskHeroCard(score: Int, onOpenMap: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF2E0916), Color(0xFF150A11))))
-            .border(1.dp, CyberRed.copy(alpha=0.3f), RoundedCornerShape(24.dp))
-            .clickable { onOpenMap() }
-    ) {
-        Column(Modifier.padding(24.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("REGIONAL THREAT LEVEL", color = CyberRed, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                    Spacer(Modifier.height(4.dp))
-                    Text("CRITICAL", color = TextPrimary, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Immediate slope failure risk detected.", color = Color(0xFFFFB3B3), fontSize = 12.sp)
-                }
-                Box(Modifier.size(80.dp).clip(CircleShape).background(CyberRed.copy(alpha=0.2f)).border(2.dp, CyberRed.copy(alpha=0.5f), CircleShape), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("$score", color = CyberRed, fontSize = 28.sp, fontWeight = FontWeight.Black); Text("INDEX", color = CyberRed, fontSize = 9.sp, letterSpacing = 1.sp, fontWeight = FontWeight.Bold) }
-                }
-            }
-            Spacer(Modifier.height(24.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Radar, null, tint = CyberRed, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("ALOS-4 TARGET: Teesta Gorge", color = TextPrimary, modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Icon(Icons.Filled.ChevronRight, null, tint = CyberRed)
-            }
-        }
-    }
-}
-
-@Composable private fun SectionTitle(title: String) {
-    Text(title, color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-}
-
-@Composable private fun ConditionsRow() {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-        ConditionCard(Icons.Filled.Speed, "INSAR SHIFT", "-28.4", "mm/y", CyberRed)
-        ConditionCard(Icons.Filled.Radar, "BACKSCATTER", "-14.2", "dB", CyberCyan)
-        ConditionCard(Icons.Filled.Landscape, "S-2 NDVI", "0.22", "Index", CyberOrange)
-        ConditionCard(Icons.Filled.Waves, "SATURATION", "91", "%", CyberBlue)
-    }
-}
-@Composable private fun ConditionCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: String, unit: String, accent: Color) {
-    Box(
-        modifier = Modifier.width(130.dp).clip(RoundedCornerShape(16.dp)).background(SurfaceDark).border(1.dp, GlassBorder, RoundedCornerShape(16.dp)).padding(16.dp)
-    ) {
-        Column {
-            Icon(icon, null, tint = accent, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(value, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(4.dp))
-                Text(unit, color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(bottom = 3.dp))
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(title, color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        }
-    }
-}
-
-@Composable private fun AlertCard(alert: AlertItem, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(SurfaceDark).border(1.dp, CyberRed.copy(alpha=0.2f), RoundedCornerShape(16.dp)).clickable(onClick = onClick)
-    ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(12.dp).clip(CircleShape).background(CyberRed))
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(alert.title, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Spacer(Modifier.height(2.dp))
-                Text("${alert.area} // ${alert.time}", color = TextSecondary, fontSize = 11.sp)
-            }
-            Icon(Icons.Filled.ChevronRight, null, tint = TextMuted)
-        }
-    }
-}
-
-@Composable private fun RiskDrivers() {
-    val drivers = listOf("InSAR Displacement" to 92 to CyberRed, "NDWI Saturation" to 84 to CyberBlue, "NDVI Scar Detect" to 68 to CyberOrange, "DEM Slope Angle" to 78 to CyberCyan)
-    Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(SurfaceDark).border(1.dp, GlassBorder, RoundedCornerShape(20.dp))) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            drivers.forEach { (pair, color) ->
-                val (name, value) = pair
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(name, color = TextPrimary, modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        Text("$value%", color = color, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(progress = { value / 100f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape), color = color, trackColor = SurfaceLight)
-                }
-            }
-        }
-    }
-}
-
-@Composable private fun AlertsScreen(onAlert: (AlertItem) -> Unit) {
+private fun AlertsScreen(onAlert: (AlertItem) -> Unit) {
     val list = listOf(
-        AlertItem("ALOS-4 InSAR Slope Shift Detected", "Kalimpong • Sector 04 (-28.4mm/y)", "8 min ago", "HIGH", 82),
-        AlertItem("Sentinel-2 Vegetation NDVI Drop", "Teesta River Gorge (NDVI: 0.22)", "15 min ago", "HIGH", 89),
-        AlertItem("Soil moisture rising", "Siliguri • North ridge", "48 min ago", "MODERATE", 57),
-        AlertItem("All clear", "Mirik • Valley zone", "1 hr ago", "LOW", 22)
+        AlertItem("Critical InSAR slope shift detected", "Kalimpong Ridge (-28.4mm/y)", "2 hours ago", "HIGH", 92),
+        AlertItem("Vegetation index drop (NDVI: 0.22)", "Teesta River Gorge", "3 hours ago", "HIGH", 89),
+        AlertItem("Soil moisture threshold crossed (84%)", "Darjeeling Observatory Hill", "5 hours ago", "MODERATE", 57),
+        AlertItem("All clear - Stable terrace", "Siliguri Bypass Basin", "12 hours ago", "LOW", 18)
     )
     var criticalOnly by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().background(LightBackground)) {
         Column(Modifier.padding(20.dp)) { 
-            Text("THREAT LOGS", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
-            Spacer(Modifier.height(8.dp))
+            Text("Active Risk Alerts", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextCharcoal)
+            Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) { 
-                Text("Filter critical events only", modifier = Modifier.weight(1f), color = TextSecondary, fontSize = 13.sp)
+                Text("Show high & critical events only", modifier = Modifier.weight(1f), color = TextMuted, fontSize = 13.sp)
                 Switch(criticalOnly, { criticalOnly = it }) 
             } 
         }
-        HorizontalDivider(color = GlassBorder)
+        HorizontalDivider(color = BorderSubtle)
         LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { 
             items(list.filter { !criticalOnly || it.severity == "HIGH" }) { AlertCard(it) { onAlert(it) } }
             item { Spacer(Modifier.height(100.dp)) }
@@ -432,47 +316,87 @@ private fun RiskHeroCard(score: Int, onOpenMap: () -> Unit) {
     }
 }
 
-@Composable private fun ProfileScreen(
+@Composable
+private fun AlertCard(alert: AlertItem, onClick: () -> Unit) {
+    val severityColor = when (alert.severity) {
+        "HIGH", "CRITICAL" -> RiskCriticalRed
+        "MODERATE" -> RiskWarningAmber
+        else -> RiskLowGreen
+    }
+
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(severityColor))
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(alert.title, color = TextCharcoal, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(Modifier.height(2.dp))
+                Text("${alert.area} • ${alert.time}", color = TextMuted, fontSize = 11.sp)
+            }
+            Icon(Icons.Filled.ChevronRight, null, tint = TextMuted)
+        }
+    }
+}
+
+@Composable
+private fun ProfileScreen(
     notifications: Boolean,
     onNotifications: (Boolean) -> Unit,
     requestLocation: () -> Unit,
     onOpenSatelliteApi: () -> Unit
 ) {
     var safety by remember { mutableStateOf(true) }
-    LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Text("SYSTEM OP", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary); Text("Configure array parameters.", color = TextSecondary, fontSize = 13.sp) }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(LightBackground),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item { Text("System & Operator Profile", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextCharcoal); Text("Configure LandGuard monitoring parameters.", color = TextMuted, fontSize = 13.sp) }
         
         item { 
-            Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(CyberCyan.copy(alpha=0.1f)).border(1.dp, CyberCyan.copy(alpha=0.3f), RoundedCornerShape(20.dp))) { 
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SoftMintContainer),
+                shape = RoundedCornerShape(20.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, SoftMint)
+            ) { 
                 Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) { 
-                    Box(Modifier.size(56.dp).clip(CircleShape).background(CyberCyan), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Person, null, tint = CoreBackground) }
+                    Box(Modifier.size(52.dp).clip(CircleShape).background(ForestPrimary), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Person, null, tint = Color.White) }
                     Spacer(Modifier.width(16.dp))
-                    Column { Text("COMMANDER ZERO", fontWeight = FontWeight.Black, color = TextPrimary, fontSize = 16.sp); Text("Clearance: MAXIMUM", color = CyberCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp) } 
+                    Column { Text("Environmental GIS Specialist", fontWeight = FontWeight.Bold, color = TextCharcoal, fontSize = 15.sp); Text("Land Monitoring Operator", color = ForestPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) } 
                 } 
             } 
         }
         
-        item { SectionTitle("SATELLITE UPLINKS") }
-        item { SettingRow("API Credentials", "Copernicus (S-2) & JAXA (ALOS-4)", Icons.Filled.Api, null, { onOpenSatelliteApi() }) }
-        item { SettingRow("Targeting Lock", "Device GPS telemetry", Icons.Filled.LocationOn, false, { requestLocation() }) }
+        item { Text("SYSTEM CONFIGURATION", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp) }
+        item { SettingRow("Backend Uplink Routes", "Configure server gateways for satellite processing", Icons.Filled.Api, null, { onOpenSatelliteApi() }) }
+        item { SettingRow("Location Positioning", "Enable device-based GPS positioning", Icons.Filled.LocationOn, false, { requestLocation() }) }
         
-        item { SectionTitle("PREFERENCES") }
-        item { SettingRow("Critical Overrides", "Push notifications for shift events", Icons.Filled.Notifications, notifications, onNotifications) }
-        item { SettingRow("Emergency Mode", "Highlight high-strain UI elements", Icons.Filled.Security, safety, { safety = it }) }
-        item { SettingRow("About LandGuard", "v2.0 • Cyber-GIS Edition", Icons.Filled.Info, null, {}) }
+        item { Text("PREFERENCES", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp) }
+        item { SettingRow("Critical Risk Push Alerts", "Push notifications for active displacement events", Icons.Filled.Notifications, notifications, onNotifications) }
+        item { SettingRow("Safety & Emergency Mode", "Keep emergency response tools prominent", Icons.Filled.Security, safety, { safety = it }) }
+        item { SettingRow("About LandGuard", "v2.0 • Professional GIS Platform", Icons.Filled.Info, null, {}) }
         
         item { Spacer(Modifier.height(100.dp)) }
     }
 }
 
-@Composable private fun SettingRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, value: Boolean?, action: (Boolean) -> Unit) { 
-    Box(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(SurfaceDark).border(1.dp, GlassBorder, RoundedCornerShape(16.dp)).clickable { if (value == null) action(true) }
+@Composable
+private fun SettingRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, value: Boolean?, action: (Boolean) -> Unit) { 
+    Card(
+        onClick = { if (value == null) action(true) },
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
     ) { 
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) { 
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(SurfaceLight), contentAlignment = Alignment.Center) { Icon(icon, null, tint = CyberCyan) }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary); Text(subtitle, color = TextSecondary, fontSize = 11.sp) }
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(SoftMintContainer), contentAlignment = Alignment.Center) { Icon(icon, null, tint = ForestPrimary) }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextCharcoal); Text(subtitle, color = TextMuted, fontSize = 11.sp) }
             if (value != null) Switch(value, action) else Icon(Icons.Filled.ChevronRight, null, tint = TextMuted) 
         } 
     } 

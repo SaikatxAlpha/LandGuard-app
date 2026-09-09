@@ -30,11 +30,9 @@ fun AlertDetailScreen(
                 val a = alert!!
                 Text(text = a.title)
                 Text(text = "Severity: ${a.severity}", modifier = Modifier.padding(top = 8.dp))
-                Text(text = "Zone: ${a.zone}", modifier = Modifier.padding(top = 8.dp))
-                Text(text = "Reported: ${a.createdAt}", modifier = Modifier.padding(top = 8.dp))
+                Text(text = "Location: ${a.affectedLocation}", modifier = Modifier.padding(top = 8.dp))
+                Text(text = "Reported: ${a.timestamp}", modifier = Modifier.padding(top = 8.dp))
                 Text(text = a.description, modifier = Modifier.padding(top = 16.dp))
-
-                // TODO: add "Mark as safe" / share / directions-to-safety actions once backend supports them.
             }
         }
     }

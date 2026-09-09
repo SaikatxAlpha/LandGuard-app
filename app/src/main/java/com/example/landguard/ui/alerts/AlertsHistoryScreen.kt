@@ -32,7 +32,7 @@ fun AlertHistoryScreen(
             items(alerts, key = { it.id }) { alert ->
                 ListItem(
                     headlineContent = { Text(alert.title) },
-                    supportingContent = { Text("${alert.severity} • ${alert.createdAt}") },
+                    supportingContent = { Text("${alert.severity} • ${alert.timestamp}") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp)
