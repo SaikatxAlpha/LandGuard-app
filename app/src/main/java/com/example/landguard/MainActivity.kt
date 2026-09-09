@@ -123,7 +123,7 @@ private fun LandGuardAppUI() {
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("LandGuard", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextCharcoal)
-                        Text("INTELLIGENT LAND RISK PLATFORM", fontSize = 9.sp, letterSpacing = 1.2.sp, color = ForestPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("INTELLIGENT LAND RISK PLATFORM", fontSize = 9.sp, letterSpacing = 0.5.sp, color = ForestPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     BadgedBox(badge = { if (notifications) Badge(containerColor = RiskCriticalRed) { Text("3", color = Color.White) } }) {
                         IconButton(onClick = { tab = Tab.ALERTS }) { Icon(Icons.Filled.Notifications, "Alerts", tint = TextCharcoal) }

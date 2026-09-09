@@ -8,20 +8,20 @@ import androidx.compose.ui.graphics.Color
 private val LandGuardLightColors = lightColorScheme(
     primary = ForestPrimary,
     onPrimary = Color.White,
-    primaryContainer = SoftMint,
+    primaryContainer = MintContainer,
     onPrimaryContainer = ForestDark,
-    secondary = SatelliteSky,
+    secondary = SatellitePrimary,
     onSecondary = Color.White,
-    secondaryContainer = SatelliteSkyContainer,
+    secondaryContainer = SatelliteContainer,
     onSecondaryContainer = Color(0xFF0369A1),
     background = LightBackground,
-    onBackground = TextCharcoal,
-    surface = CardSurface,
-    onSurface = TextCharcoal,
-    surfaceVariant = SurfaceCream,
-    onSurfaceVariant = TextMuted,
-    outline = BorderSubtle,
-    error = RiskCriticalRed
+    onBackground = PrimaryText,
+    surface = Surface,
+    onSurface = PrimaryText,
+    surfaceVariant = SurfaceSubtle,
+    onSurfaceVariant = SecondaryText,
+    outline = BorderLight,
+    error = RiskCritical
 )
 
 @Composable

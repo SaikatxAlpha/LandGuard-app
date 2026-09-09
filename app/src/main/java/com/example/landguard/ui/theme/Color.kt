@@ -2,31 +2,70 @@ package com.example.landguard.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary Deep Forest Green Palette
-val ForestPrimary = Color(0xFF166534)
-val ForestDark = Color(0xFF14532D)
-val ForestLight = Color(0xFF22C55E)
+// LandGuard Brand Palette - Light Theme
+// Primary: Forest Green identity
+val ForestPrimary = Color(0xFF145A46)
+// Darker forest for headers/containers
+val ForestDark = Color(0xFF124A3C)
+// Forest for subtle accents
+val Forest = Color(0xFF1E7052)
 
-// Secondary & Soft Mint Palette
-val SoftMint = Color(0xFFDCFCE7)
-val SoftMintContainer = Color(0xFFF0FDF4)
-val SurfaceCream = Color(0xFFFCFBF8)
-val LightBackground = Color(0xFFF8FAF8)
-val CardSurface = Color(0xFFFFFFFF)
-
-// Accent Satellite Sky Blue
-val SatelliteSky = Color(0xFF0284C7)
+// Secondary: Satellite / Informational Blue
+val SatellitePrimary = Color(0xFF0284C7)
+val SatelliteLight = Color(0xFFE2F0FF)
+val SatelliteContainer = Color(0xFFF8FAFD)
+val SatelliteSky = SatellitePrimary
 val SatelliteSkyContainer = Color(0xFFE0F2FE)
 
-// Status & Risk Colors
-val RiskLowGreen = Color(0xFF16A34A)
-val RiskModerateYellow = Color(0xFFEAB308)
-val RiskWarningAmber = Color(0xFFD97706)
-val RiskCriticalRed = Color(0xFFDC2626)
+// Light mint - used sparingly for contrast
+val MintLight = Color(0xFFF0F9F6)
+val MintContainer = Color(0xFFF8FCF7)
+val SoftMint = Color(0xFFE6F4EE)
+val SoftMintContainer = MintContainer
 
-// Typography & Border Colors
-val TextCharcoal = Color(0xFF1F2937)
-val TextMuted = Color(0xFF6B7280)
-val TextSubtle = Color(0xFF9CA3AF)
-val BorderSubtle = Color(0xFFE5E7EB)
-val BorderMedium = Color(0xFFD1D5DB)
+// Background - warm off-white
+val LightBackground = Color(0xFFF8FAFC)
+// Surface - pure white
+val Surface = Color(0xFFFFFFFF)
+val CardSurface = Surface
+// Subtle surface for cards
+val SurfaceSubtle = Color(0xFFF1F5F9)
+
+// Primary text - dark charcoal
+val PrimaryText = Color(0xFF0F172A)
+val TextCharcoal = PrimaryText
+// Secondary text - muted
+val SecondaryText = Color(0xFF475569)
+val TextMuted = SecondaryText
+// Tertiary text - subtle
+val TertiaryText = Color(0xFF94A3B8)
+
+// Border colors
+val BorderLight = Color(0xFFE2E8F0)
+val BorderSubtle = BorderLight
+// Medium border for inputs
+val BorderMedium = Color(0xFFCBD5E1)
+
+// Status/ Risk Colors
+val RiskLow = Color(0xFF16A34A)
+val RiskLowGreen = RiskLow
+val RiskLowContainer = Color(0xFFDCFCE7)
+
+val RiskModerate = Color(0xFFD97706)
+val RiskModerateYellow = RiskModerate
+val RiskWarningAmber = Color(0xFFD97706)
+val RiskWarningContainer = Color(0xFFFEF3C7)
+
+val RiskHigh = Color(0xFFDC2626)
+val RiskCritical = Color(0xFFDC2626)
+val RiskCriticalRed = RiskCritical
+val RiskCriticalContainer = Color(0xFFFEE2E2)
+
+// Used for non-critical indicators only
+val InfoAccent = Color(0xFF0284C7)
+val SuccessAccent = Color(0xFF16A34A)
+val WarningAccent = Color(0xFFD97706)
+val ErrorAccent = Color(0xFFDC2626)
+
+// Disabled / inactive
+val Disabled = Color(0xFFE2E8F0)
