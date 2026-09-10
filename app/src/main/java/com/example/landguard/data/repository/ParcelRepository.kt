@@ -1,3 +1,5 @@
+// app/src/main/java/com/example/landguard/data/repository/ParcelRepository.kt
+
 package com.example.landguard.data.repository
 
 import com.example.landguard.domain.model.LandCoverBreakdown
@@ -23,7 +25,7 @@ class ParcelRepositoryImpl @Inject constructor() : ParcelRepository {
     private val sampleParcels = listOf(
         LandParcel(
             id = "pcl_01",
-            name = "Kalimpong Slope - Sector 04",
+            name = "Kalimpong Slope – Sector 04",
             villageOrDistrict = "Kalimpong Ridge",
             stateName = "West Bengal",
             latitude = 27.0600,
@@ -57,7 +59,7 @@ class ParcelRepositoryImpl @Inject constructor() : ParcelRepository {
             latitude = 27.0410,
             longitude = 88.2630,
             areaHectares = 88.2,
-            landType = "Urban/Built-up",
+            landType = "Urban / Built-up",
             riskScore = 63,
             riskCategory = Severity.MODERATE,
             lastUpdated = "3 hours ago",
@@ -76,20 +78,36 @@ class ParcelRepositoryImpl @Inject constructor() : ParcelRepository {
             riskCategory = Severity.LOW,
             lastUpdated = "5 hours ago",
             isDemoData = true
+        ),
+        LandParcel(
+            id = "pcl_05",
+            name = "Gorubathan Valley Terrace",
+            villageOrDistrict = "Gorubathan",
+            stateName = "West Bengal",
+            latitude = 26.8600,
+            longitude = 88.5100,
+            areaHectares = 178.4,
+            landType = "Forest",
+            riskScore = 74,
+            riskCategory = Severity.HIGH,
+            lastUpdated = "6 hours ago",
+            isDemoData = true
         )
     )
 
     private val breakdown = LandCoverBreakdown(
-        agriculturalPercentage = 42,
-        forestPercentage = 35,
-        urbanPercentage = 12,
-        waterPercentage = 8,
-        otherPercentage = 3
+        agriculturalPercentage = 38,
+        forestPercentage       = 40,
+        urbanPercentage        = 10,
+        waterPercentage        = 8,
+        otherPercentage        = 4
     )
 
-    override fun observeParcels(): Flow<List<LandParcel>> = MutableStateFlow(sampleParcels).asStateFlow()
+    private val parcelsFlow = MutableStateFlow(sampleParcels)
 
-    override fun observeLandCoverBreakdown(): Flow<LandCoverBreakdown> = MutableStateFlow(breakdown).asStateFlow()
+    override fun observeParcels(): Flow<List<LandParcel>>        = parcelsFlow.asStateFlow()
+    override fun observeLandCoverBreakdown(): Flow<LandCoverBreakdown> =
+        MutableStateFlow(breakdown).asStateFlow()
 
     override suspend fun getParcelById(id: String): Result<LandParcel> {
         val parcel = sampleParcels.find { it.id == id } ?: sampleParcels.first()

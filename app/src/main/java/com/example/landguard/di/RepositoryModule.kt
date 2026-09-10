@@ -1,7 +1,11 @@
+// app/src/main/java/com/example/landguard/di/RepositoryModule.kt
+
 package com.example.landguard.di
 
 import com.example.landguard.data.repository.AlertRepository
 import com.example.landguard.data.repository.AlertRepositoryImpl
+import com.example.landguard.data.repository.ForecastRepository
+import com.example.landguard.data.repository.ForecastRepositoryImpl
 import com.example.landguard.data.repository.ParcelRepository
 import com.example.landguard.data.repository.ParcelRepositoryImpl
 import com.example.landguard.data.repository.ProfileRepository
@@ -24,31 +28,27 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
 
-    @Binds
-    @Singleton
+    @Binds @Singleton
     abstract fun bindAlertRepository(impl: AlertRepositoryImpl): AlertRepository
 
-    @Binds
-    @Singleton
+    @Binds @Singleton
+    abstract fun bindForecastRepository(impl: ForecastRepositoryImpl): ForecastRepository
+
+    @Binds @Singleton
     abstract fun bindProfileRepository(impl: ProfileRepositoryImpl): ProfileRepository
 
-    @Binds
-    @Singleton
+    @Binds @Singleton
     abstract fun bindReportRepository(impl: ReportRepositoryImpl): ReportRepository
 
-    @Binds
-    @Singleton
+    @Binds @Singleton
     abstract fun bindZoneRepository(impl: ZoneRepositoryImpl): ZoneRepository
 
-    @Binds
-    @Singleton
+    @Binds @Singleton
     abstract fun bindSatelliteRepository(impl: SatelliteRepositoryImpl): SatelliteRepository
 
-    @Binds
-    @Singleton
+    @Binds @Singleton
     abstract fun bindParcelRepository(impl: ParcelRepositoryImpl): ParcelRepository
 
-    @Binds
-    @Singleton
+    @Binds @Singleton
     abstract fun bindRiskEngineService(impl: RiskEngineServiceImpl): RiskEngineService
 }
