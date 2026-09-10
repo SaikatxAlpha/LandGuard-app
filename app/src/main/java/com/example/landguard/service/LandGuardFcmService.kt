@@ -3,12 +3,10 @@ package com.example.landguard.service
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.landguard.MainActivity
-import com.example.landguard.R
 import com.example.landguard.data.network.DeviceRegisterRequest
 import com.example.landguard.data.network.LandGuardApiService
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -48,7 +46,7 @@ class LandGuardFcmService : FirebaseMessagingService() {
 
     private fun showNotification(title: String, body: String, alertId: String?) {
         val channelId = "landguard_alerts"
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.landguard.data.repository.AlertRepository
 import com.example.landguard.domain.model.Alert
+import com.example.landguard.domain.model.AlertStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +16,7 @@ import javax.inject.Inject
 @HiltViewModel
 class AlertDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    repository: AlertRepository
+    private val repository: AlertRepository
 ) : ViewModel() {
 
     private val alertId: String = savedStateHandle.get<String>("alertId") ?: ""
@@ -28,6 +29,12 @@ class AlertDetailViewModel @Inject constructor(
             repository.observeHistory().collect { alerts ->
                 _alert.value = alerts.firstOrNull { it.id == alertId }
             }
+        }
+    }
+
+    fun updateAlertStatus(id: String, status: AlertStatus) {
+        viewModelScope.launch {
+            repository.updateAlertStatus(id, status)
         }
     }
 }

@@ -1,11 +1,9 @@
-// app/src/main/java/com/example/landguard/data/repository/AlertRepository.kt
-
 package com.example.landguard.data.repository
 
+import com.example.landguard.data.network.LandGuardApiService
+import com.example.landguard.data.network.StatusUpdateRequest
 import com.example.landguard.domain.model.Alert
 import com.example.landguard.domain.model.AlertStatus
-import com.example.landguard.domain.model.Severity
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,7 +18,7 @@ interface AlertRepository {
 
 @Singleton
 class AlertRepositoryImpl @Inject constructor(
-    private val apiService: com.example.landguard.data.network.LandGuardApiService
+    private val apiService: LandGuardApiService
 ) : AlertRepository {
 
     private val alertsState = MutableStateFlow<List<Alert>>(emptyList())
@@ -32,7 +30,6 @@ class AlertRepositoryImpl @Inject constructor(
             Result.success(alerts)
         } catch (e: Exception) {
             e.printStackTrace()
-            // optionally use cached items
             Result.failure(e)
         }
     }
@@ -41,7 +38,7 @@ class AlertRepositoryImpl @Inject constructor(
 
     override suspend fun updateAlertStatus(alertId: String, newStatus: AlertStatus): Result<Unit> {
         return try {
-            apiService.updateAlertStatus(alertId, com.example.landguard.data.network.StatusUpdateRequest(newStatus.name))
+            apiService.updateAlertStatus(alertId, StatusUpdateRequest(newStatus.name))
             val updated = alertsState.value.map {
                 if (it.id == alertId) it.copy(status = newStatus) else it
             }
