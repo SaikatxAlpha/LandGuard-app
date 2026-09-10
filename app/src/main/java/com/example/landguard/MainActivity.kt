@@ -487,11 +487,6 @@ private fun LandGuardAppUI(alertId: String? = null) {
 }
 
 @Composable
-
-
-// ─── Top App Bar ─────────────────────────────────────────────────────────────
-
-@Composable
 private fun ProTopBar(
     onNotifications: () -> Unit,
     onGps: () -> Unit,
@@ -570,11 +565,6 @@ private fun ProTopBar(
 }
 
 @Composable
-
-
-// ─── Alerts Screen ────────────────────────────────────────────────────────────
-
-@Composable
 private fun AlertsScreen(
     onAlert: (com.example.landguard.domain.model.Alert) -> Unit,
     targetAlertId: String? = null,
@@ -645,9 +635,6 @@ private fun AlertsScreen(
 }
 
 @Composable
-
-
-@Composable
 private fun AlertFeedCard(alert: com.example.landguard.domain.model.Alert, onClick: () -> Unit) {
     val (accent, bg) = when (alert.severity.name) {
         "CRITICAL" -> Pair(RiskCritical,  RiskCriticalContainer)
@@ -703,11 +690,6 @@ private fun AlertFeedCard(alert: com.example.landguard.domain.model.Alert, onCli
         }
     }
 }
-
-@Composable
-
-
-// ─── Profile / Settings Screen ────────────────────────────────────────────────
 
 @Composable
 private fun ProfileScreen(
@@ -794,9 +776,6 @@ private fun ProfileScreen(
 }
 
 @Composable
-
-
-@Composable
 private fun SectionLabel(text: String) {
     Text(
         text,
@@ -858,5 +837,3 @@ private fun SettingCard(
         }
     }
 }
-
-@Composable
