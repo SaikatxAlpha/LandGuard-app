@@ -1,15 +1,6 @@
-// app/src/main/java/com/example/landguard/ui/home/HomeScreen.kt
-
 package com.example.landguard.ui.home
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,81 +17,54 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Landscape
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Radar
-import androidx.compose.material.icons.filled.Satellite
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Timelapse
+import androidx.compose.material.icons.filled.Satellite
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.landguard.domain.model.Alert
-import com.example.landguard.domain.model.ForecastDay
 import com.example.landguard.domain.model.LandParcel
-import com.example.landguard.domain.model.SatelliteObservation
 import com.example.landguard.domain.model.Severity
-import com.example.landguard.ui.theme.Alos4Brand
+import com.example.landguard.ui.components.LandGuardAlertCard
+import com.example.landguard.ui.components.LandGuardCard
+import com.example.landguard.ui.components.LandGuardSectionHeader
+import com.example.landguard.ui.components.LandGuardStatCard
+import com.example.landguard.ui.components.RiskBadge
+import com.example.landguard.ui.components.RiskGauge
 import com.example.landguard.ui.theme.BgBorder
 import com.example.landguard.ui.theme.BgDeep
-import com.example.landguard.ui.theme.BgElevated
 import com.example.landguard.ui.theme.BgSurface
-import com.example.landguard.ui.theme.CyanContainer
-import com.example.landguard.ui.theme.CyanGlow
-import com.example.landguard.ui.theme.CyanPrimary
+import com.example.landguard.ui.theme.BrandContainer
+import com.example.landguard.ui.theme.BrandPrimary
 import com.example.landguard.ui.theme.EmeraldContainer
-import com.example.landguard.ui.theme.EmeraldGlow
-import com.example.landguard.ui.theme.EmeraldPrimary
-import com.example.landguard.ui.theme.PurpleContainer
-import com.example.landguard.ui.theme.PurpleGlow
-import com.example.landguard.ui.theme.PurplePrimary
 import com.example.landguard.ui.theme.RiskCritical
-import com.example.landguard.ui.theme.RiskCriticalContainer
-import com.example.landguard.ui.theme.RiskCriticalGlow
 import com.example.landguard.ui.theme.RiskHigh
-import com.example.landguard.ui.theme.RiskHighContainer
-import com.example.landguard.ui.theme.RiskHighGlow
 import com.example.landguard.ui.theme.RiskLow
-import com.example.landguard.ui.theme.RiskLowContainer
-import com.example.landguard.ui.theme.RiskLowGlow
 import com.example.landguard.ui.theme.RiskModerate
-import com.example.landguard.ui.theme.RiskModerateContainer
-import com.example.landguard.ui.theme.RiskModerateGlow
-import com.example.landguard.ui.theme.SentinelBrand
 import com.example.landguard.ui.theme.TextMuted
 import com.example.landguard.ui.theme.TextPrimary
 import com.example.landguard.ui.theme.TextSecondary
-import com.example.landguard.ui.theme.TextWhite
-
-// ─── Root Screen ──────────────────────────────────────────────────────────────
 
 @Composable
 fun HomeScreen(
@@ -112,872 +76,894 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val highestRiskParcel = uiState.parcels.maxByOrNull { it.riskScore }
+
+    val currentRiskScore = highestRiskParcel?.riskScore ?: 0
+
+    val activeAlerts = uiState.alerts.count {
+        it.severity != Severity.LOW &&
+                it.status != com.example.landguard.domain.model.AlertStatus.RESOLVED
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(BgDeep),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
-        contentPadding = PaddingValues(bottom = 120.dp)
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 18.dp,
+            bottom = 110.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
 
-        // ── Live Status Ticker ────────────────────────────────────────────────
-        item { LiveStatusTicker() }
+        // ─────────────────────────────────────────────────────────────
+        // HEADER
+        // ─────────────────────────────────────────────────────────────
 
-        // ── Search Bar ───────────────────────────────────────────────────────
+        item {
+            HomeHeader(
+                activeAlerts = activeAlerts,
+                onNotificationsClick = onOpenAlertHistory,
+                onProfileClick = onOpenProfile
+            )
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // SEARCH
+        // ─────────────────────────────────────────────────────────────
+
         item {
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = viewModel::onSearchQueryChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = BrandPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
                 placeholder = {
                     Text(
-                        "Search parcels, alerts, coordinates…",
+                        text = "Search parcels, locations or alerts...",
                         color = TextMuted,
                         fontSize = 13.sp
                     )
                 },
-                leadingIcon = {
-                    Icon(Icons.Filled.Search, null, tint = CyanPrimary, modifier = Modifier.size(20.dp))
-                },
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(15.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor   = BgSurface,
+                    focusedContainerColor = BgSurface,
                     unfocusedContainerColor = BgSurface,
-                    focusedBorderColor      = CyanPrimary,
-                    unfocusedBorderColor    = BgBorder,
-                    focusedTextColor        = TextPrimary,
-                    unfocusedTextColor      = TextPrimary,
-                    cursorColor             = CyanPrimary
+                    focusedBorderColor = BrandPrimary,
+                    unfocusedBorderColor = BgBorder,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
+                    cursorColor = BrandPrimary
                 )
             )
         }
 
-        // ── Mission Control Hero Card ─────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────
+        // CURRENT LAND RISK
+        // ─────────────────────────────────────────────────────────────
+
         item {
-            MissionControlCard(
-                parcels   = uiState.parcels,
-                alerts    = uiState.alerts,
-                totalHa   = uiState.totalMonitoredHa,
-                onOpenMap = onOpenMap,
-                modifier  = Modifier.padding(horizontal = 16.dp)
+            CurrentRiskCard(
+                score = currentRiskScore,
+                parcel = highestRiskParcel,
+                onOpenMap = onOpenMap
             )
         }
 
-        // ── Quick Stats Row ───────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────
+        // STATISTICS
+        // ─────────────────────────────────────────────────────────────
+
         item {
-            QuickStatsRow(
-                monitored  = uiState.parcels.size,
-                active     = uiState.alerts.count { it.severity != Severity.LOW },
-                maxRisk    = uiState.parcels.maxOfOrNull { it.riskScore } ?: 0,
-                totalHa    = uiState.totalMonitoredHa.toInt(),
-                modifier   = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
+            LandGuardSectionHeader(
+                title = "Overview",
+                action = null,
+                onAction = null
             )
-        }
 
-        // ── Satellite Pass Countdown ──────────────────────────────────────────
-        item {
-            SatellitePassCard(
-                alos4Time     = "ALOS-4 PALSAR-3",
-                alos4Eta      = "3h 42m",
-                sentinelTime  = "Sentinel-2C",
-                sentinelEta   = "11h 09m",
-                modifier      = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-
-        // ── 7-Day Risk Forecast Strip ─────────────────────────────────────────
-        if (uiState.forecastDays.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(14.dp))
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(PurpleContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Filled.Timelapse, null, tint = PurplePrimary, modifier = Modifier.size(16.dp))
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Text("7-Day Risk Forecast", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.weight(1f))
-                    Surface(color = PurpleContainer, shape = RoundedCornerShape(8.dp)) {
-                        Text(
-                            "AI-POWERED",
-                            color = PurplePrimary,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(uiState.forecastDays) { day ->
-                        ForecastDayChip(day = day)
-                    }
-                }
-            }
-        }
-
-        // ── Latest Satellite Observation ──────────────────────────────────────
-        uiState.latestObservation?.let { obs ->
-            item {
-                Spacer(Modifier.height(14.dp))
-                LatestObservationCard(
-                    obs      = obs,
-                    onClick  = onOpenMap,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-        }
-
-        // ── Alerts Section ────────────────────────────────────────────────────
-        item {
-            Spacer(Modifier.height(14.dp))
-            ProSectionHeader(
-                title      = "Active Risk Alerts",
-                icon       = Icons.Filled.Notifications,
-                accentColor = RiskCritical,
-                badgeCount = uiState.alerts.count { it.severity != Severity.LOW },
-                actionLabel = "All ${uiState.alerts.size}",
-                onAction   = onOpenAlertHistory,
-                modifier   = Modifier.padding(horizontal = 16.dp)
-            )
             Spacer(Modifier.height(10.dp))
-        }
 
-        items(uiState.alerts.take(3), key = { it.id }) { alert ->
-            AlertItemCard(
-                alert    = alert,
-                onClick  = { onOpenAlert(alert.id) },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-        }
-
-        // ── Land Parcels Section ──────────────────────────────────────────────
-        item {
-            Spacer(Modifier.height(14.dp))
-            ProSectionHeader(
-                title       = "Monitored Land Parcels",
-                icon        = Icons.Filled.Landscape,
-                accentColor = EmeraldPrimary,
-                modifier    = Modifier.padding(horizontal = 16.dp)
-            )
-            Spacer(Modifier.height(10.dp))
-        }
-
-        items(uiState.parcels, key = { it.id }) { parcel ->
-            ParcelItemCard(
-                parcel   = parcel,
-                onClick  = onOpenMap,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-        }
-    }
-}
-
-// ─── Live Status Ticker ─────────────────────────────────────────────────────
-
-@Composable
-private fun LiveStatusTicker() {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue  = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "live_dot"
-    )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(BgSurface)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(EmeraldPrimary.copy(alpha = alpha))
-        )
-        Spacer(Modifier.width(8.dp))
-        Text("LIVE", color = EmeraldPrimary, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.8.sp)
-        Spacer(Modifier.width(14.dp))
-        Text(
-            "•  ALOS-4 Active on Path 114  •  5 Zones Online  •  Last sync: 8m ago  •  Sentinel-2 Overpass: 3h 42m  •  InSAR Analysis: Running  •  Monsoon Alert Active",
-            color = TextSecondary,
-            fontSize = 10.sp,
-            maxLines = 1,
-            modifier = Modifier
-                .weight(1f)
-                .basicMarquee()
-        )
-    }
-}
-
-// ─── Mission Control Hero Card ──────────────────────────────────────────────
-
-@Composable
-private fun MissionControlCard(
-    parcels: List<LandParcel>,
-    alerts: List<Alert>,
-    totalHa: Double,
-    onOpenMap: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val criticalCount = parcels.count { it.riskCategory == Severity.CRITICAL }
-    val highCount     = parcels.count { it.riskCategory == Severity.HIGH }
-    val maxRisk       = parcels.maxOfOrNull { it.riskScore } ?: 0
-    val isCriticalState = criticalCount > 0
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        if (isCriticalState) Color(0xFF200010) else Color(0xFF001828),
-                        BgElevated,
-                        BgSurface
-                    )
-                )
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        if (isCriticalState) RiskCritical.copy(alpha = 0.5f) else CyanPrimary.copy(alpha = 0.4f),
-                        BgBorder,
-                        Color.Transparent
-                    )
-                ),
-                shape = RoundedCornerShape(24.dp)
-            )
-            .padding(20.dp)
-    ) {
-        Column {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column {
-                    Text(
-                        "Mission Control",
-                        color = TextPrimary,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-0.3).sp
-                    )
-                    Text(
-                        "Land Risk Command Center",
-                        color = TextSecondary,
-                        fontSize = 12.sp
-                    )
-                }
-                Surface(
-                    color = if (isCriticalState) RiskCriticalContainer else EmeraldContainer,
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(if (isCriticalState) RiskCritical else EmeraldPrimary)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = if (isCriticalState) "CRITICAL" else "STABLE",
-                            color = if (isCriticalState) RiskCritical else EmeraldPrimary,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.2.sp
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(18.dp))
-
-            // Risk distribution bar
-            val total = parcels.size.toFloat().coerceAtLeast(1f)
-            val cFrac = criticalCount / total
-            val hFrac = highCount / total
-            val mFrac = parcels.count { it.riskCategory == Severity.MODERATE } / total
-            val lFrac = parcels.count { it.riskCategory == Severity.LOW } / total
-
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Risk Distribution", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp)
-                    Text("${parcels.size} parcels", color = TextMuted, fontSize = 10.sp)
-                }
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(7.dp)
-                        .clip(CircleShape)
-                ) {
-                    if (cFrac > 0) Box(Modifier.weight(cFrac).fillMaxHeight().background(RiskCritical))
-                    if (hFrac > 0) Box(Modifier.weight(hFrac).fillMaxHeight().background(RiskHigh))
-                    if (mFrac > 0) Box(Modifier.weight(mFrac).fillMaxHeight().background(RiskModerate))
-                    if (lFrac > 0) Box(Modifier.weight(lFrac).fillMaxHeight().background(RiskLow))
-                }
-            }
-
-            Spacer(Modifier.height(18.dp))
-
-            // Mini metrics
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                HeroMetricChip("MAX RISK", "$maxRisk%",    RiskCritical,  RiskCriticalContainer, Modifier.weight(1f))
-                HeroMetricChip("ALERTS",  "${alerts.size}", RiskModerate,  RiskModerateContainer, Modifier.weight(1f))
-                HeroMetricChip("ZONES",   "${parcels.size}", CyanPrimary,  CyanContainer,          Modifier.weight(1f))
-                HeroMetricChip("HECTARES","${totalHa.toInt()}", EmeraldPrimary, EmeraldContainer, Modifier.weight(1f))
+                LandGuardStatCard(
+                    value = uiState.parcels.size.toString(),
+                    label = "Monitored Parcels",
+                    modifier = Modifier.weight(1f),
+                    accent = BrandPrimary
+                )
+
+                LandGuardStatCard(
+                    value = activeAlerts.toString(),
+                    label = "Active Alerts",
+                    modifier = Modifier.weight(1f),
+                    accent = RiskCritical
+                )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(10.dp))
 
-            // Open Map CTA
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                LandGuardStatCard(
+                    value = uiState.parcels.count {
+                        it.riskCategory == Severity.HIGH ||
+                                it.riskCategory == Severity.CRITICAL
+                    }.toString(),
+                    label = "High-Risk Zones",
+                    modifier = Modifier.weight(1f),
+                    accent = RiskHigh
+                )
+
+                LandGuardStatCard(
+                    value = uiState.totalMonitoredHa
+                        .let { String.format("%.1f", it) },
+                    label = "Hectares",
+                    modifier = Modifier.weight(1f),
+                    accent = RiskLow
+                )
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // LIVE MAP
+        // ─────────────────────────────────────────────────────────────
+
+        item {
+            LandGuardSectionHeader(
+                title = "Live Map",
+                action = "View Full Map",
+                onAction = onOpenMap
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            LiveMapCard(
+                parcels = uiState.parcels,
+                onClick = onOpenMap
+            )
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // ACTIVE ALERTS
+        // ─────────────────────────────────────────────────────────────
+
+        if (uiState.alerts.isNotEmpty()) {
+            item {
+                LandGuardSectionHeader(
+                    title = "Recent Alerts",
+                    action = "View All",
+                    onAction = onOpenAlertHistory
+                )
+            }
+
+            items(
+                count = minOf(uiState.alerts.size, 3),
+                key = { index -> uiState.alerts[index].id }
+            ) { index ->
+
+                val alert = uiState.alerts[index]
+
+                LandGuardAlertCard(
+                    title = alert.title,
+                    location = alert.affectedLocation.ifBlank {
+                        "Location unavailable"
+                    },
+                    timestamp = alert.timestamp.ifBlank {
+                        "Recently detected"
+                    },
+                    severity = alert.severity,
+                    description = alert.description,
+                    onClick = {
+                        onOpenAlert(alert.id)
+                    }
+                )
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // SATELLITE DATA
+        // ─────────────────────────────────────────────────────────────
+
+        item {
+            uiState.latestObservation?.let { observation ->
+
+                SatelliteSummaryCard(
+                    provider = observation.provider,
+                    location = observation.locationName,
+                    observationDate = observation.observationDate,
+                    ndvi = observation.ndviIndex,
+                    confidence = observation.confidencePercentage,
+                    onClick = onOpenMap
+                )
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // MONITORED PARCELS
+        // ─────────────────────────────────────────────────────────────
+
+        if (uiState.parcels.isNotEmpty()) {
+            item {
+                LandGuardSectionHeader(
+                    title = "Monitored Parcels",
+                    action = "View Map",
+                    onAction = onOpenMap
+                )
+            }
+
+            items(
+                count = minOf(uiState.parcels.size, 3),
+                key = { index -> uiState.parcels[index].id }
+            ) { index ->
+
+                val parcel = uiState.parcels[index]
+
+                ParcelSummaryCard(
+                    parcel = parcel,
+                    onClick = onOpenMap
+                )
+            }
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// HEADER
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun HomeHeader(
+    activeAlerts: Int,
+    onNotificationsClick: () -> Unit,
+    onProfileClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = "Good morning,",
+                color = TextSecondary,
+                fontSize = 14.sp
+            )
+
+            Spacer(Modifier.height(2.dp))
+
+            Text(
+                text = "Explorer 🌿",
+                color = TextPrimary,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.4).sp
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            Text(
+                text = "Monitor your land and detect changes early.",
+                color = TextMuted,
+                fontSize = 12.sp
+            )
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        Box(
+            modifier = Modifier.size(46.dp)
+        ) {
+
+            IconButton(
+                onClick = onNotificationsClick,
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(BgSurface)
+                    .border(
+                        width = 1.dp,
+                        color = BgBorder,
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "Notifications",
+                    tint = BrandPrimary,
+                    modifier = Modifier.size(21.dp)
+                )
+            }
+
+            if (activeAlerts > 0) {
+                Box(
+                    modifier = Modifier
+                        .size(17.dp)
+                        .align(Alignment.TopEnd)
+                        .clip(CircleShape)
+                        .background(RiskCritical)
+                        .border(
+                            width = 2.dp,
+                            color = BgDeep,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (activeAlerts > 9) "9+" else activeAlerts.toString(),
+                        color = Color.White,
+                        fontSize = 7.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        IconButton(
+            onClick = onProfileClick,
+            modifier = Modifier
+                .size(46.dp)
+                .clip(CircleShape)
+                .background(BrandContainer)
+                .border(
+                    width = 1.dp,
+                    color = BrandPrimary.copy(alpha = 0.18f),
+                    shape = CircleShape
+                )
+        ) {
+            Text(
+                text = "E",
+                color = BrandPrimary,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// CURRENT LAND RISK
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun CurrentRiskCard(
+    score: Int,
+    parcel: LandParcel?,
+    onOpenMap: () -> Unit
+) {
+    val risk = when {
+        score >= 80 -> Severity.CRITICAL
+        score >= 60 -> Severity.HIGH
+        score >= 35 -> Severity.MODERATE
+        else -> Severity.LOW
+    }
+
+    LandGuardCard {
+
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "CURRENT LAND RISK",
+                        color = TextMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Text(
+                        text = "Overall Risk",
+                        color = TextPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    RiskBadge(severity = risk)
+
+                    Spacer(Modifier.height(10.dp))
+
+                    if (parcel != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = BrandPrimary,
+                                modifier = Modifier.size(15.dp)
+                            )
+
+                            Spacer(Modifier.width(4.dp))
+
+                            Text(
+                                text = parcel.villageOrDistrict,
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                RiskGauge(
+                    score = score,
+                    size = 142.dp
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(BgDeep)
+                    .clickable(onClick = onOpenMap)
+                    .padding(
+                        horizontal = 14.dp,
+                        vertical = 11.dp
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = BrandPrimary,
+                    modifier = Modifier.size(17.dp)
+                )
+
+                Spacer(Modifier.width(8.dp))
+
+                Text(
+                    text = "View risk on map",
+                    color = BrandPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = BrandPrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// LIVE MAP CARD
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun LiveMapCard(
+    parcels: List<LandParcel>,
+    onClick: () -> Unit
+) {
+    LandGuardCard(
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(190.dp)
+                .background(
+                    Color(0xFFE2EAE4)
+                )
+        ) {
+
+            // Map-like geographic background.
+            // The actual interactive MapLibre map opens when this card
+            // is selected. This avoids replacing the real map with a
+            // fake implementation.
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(CyanPrimary.copy(alpha = 0.10f))
-                    .border(1.dp, CyanPrimary.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                    .clickable(onClick = onOpenMap),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Radar, null, tint = CyanPrimary, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "OPEN RISK MAP",
-                        color = CyanPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        letterSpacing = 1.5.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeroMetricChip(
-    label: String, value: String,
-    accent: Color, bg: Color,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, color = accent, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-            Text(label, color = TextMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-        }
-    }
-}
-
-// ─── Quick Stats Row ─────────────────────────────────────────────────────────
-
-@Composable
-private fun QuickStatsRow(
-    monitored: Int, active: Int,
-    maxRisk: Int, totalHa: Int,
-    modifier: Modifier = Modifier
-) {
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        StatCard("MONITORED", "$monitored", EmeraldPrimary,   EmeraldContainer, Modifier.weight(1f))
-        StatCard("ALERTS",    "$active",    RiskCritical,     RiskCriticalContainer, Modifier.weight(1f))
-        StatCard("MAX RISK",  "$maxRisk%",  RiskModerate,     RiskModerateContainer, Modifier.weight(1f))
-        StatCard("HA",        "$totalHa",   CyanPrimary,      CyanContainer,    Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun StatCard(
-    label: String, value: String,
-    accent: Color, bg: Color,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .height(72.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(bg)
-            .border(1.dp, accent.copy(alpha = 0.2f), RoundedCornerShape(14.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, color = accent, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-            Text(label, color = TextMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-        }
-    }
-}
-
-// ─── Satellite Pass Countdown ────────────────────────────────────────────────
-
-@Composable
-private fun SatellitePassCard(
-    alos4Time: String, alos4Eta: String,
-    sentinelTime: String, sentinelEta: String,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors   = CardDefaults.cardColors(containerColor = BgSurface),
-        shape    = RoundedCornerShape(18.dp),
-        border   = androidx.compose.foundation.BorderStroke(1.dp, BgBorder)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Satellite, null, tint = CyanPrimary, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Upcoming Satellite Passes", color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PassChip(
-                    name    = alos4Time,
-                    eta     = alos4Eta,
-                    sub     = "L-Band SAR • InSAR Active",
-                    accent  = Alos4Brand,
-                    bg      = RiskHighContainer,
-                    modifier = Modifier.weight(1f)
-                )
-                PassChip(
-                    name    = sentinelTime,
-                    eta     = sentinelEta,
-                    sub     = "10m Optical • VNIR+SWIR",
-                    accent  = SentinelBrand,
-                    bg      = CyanContainer,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PassChip(
-    name: String, eta: String, sub: String,
-    accent: Color, bg: Color,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(bg)
-            .border(1.dp, accent.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-            .padding(12.dp)
-    ) {
-        Column {
-            Text(name, color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text(eta, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-            Spacer(Modifier.height(2.dp))
-            Text(sub, color = TextMuted, fontSize = 9.sp)
-        }
-    }
-}
-
-// ─── 7-Day Forecast Chip ────────────────────────────────────────────────────
-
-@Composable
-private fun ForecastDayChip(day: ForecastDay) {
-    val (accent, bg, glow) = riskColors(day.riskCategory)
-    val isToday = day.dayLabel == "TODAY"
-
-    Box(
-        modifier = Modifier
-            .width(76.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (isToday) bg else BgSurface)
-            .border(
-                width = if (isToday) 1.5.dp else 1.dp,
-                color = if (isToday) accent else BgBorder,
-                shape = RoundedCornerShape(16.dp)
+                    .height(1.dp)
+                    .align(Alignment.Center)
+                    .background(Color(0xFFC8D7CC))
             )
-            .padding(vertical = 12.dp, horizontal = 8.dp)
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                day.dayLabel,
-                color      = if (isToday) accent else TextSecondary,
-                fontSize   = 9.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 0.8.sp
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(day.conditionEmoji, fontSize = 20.sp)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "${day.riskScore}%",
-                color      = accent,
-                fontSize   = 15.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-            Spacer(Modifier.height(2.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.WaterDrop, null, tint = CyanPrimary, modifier = Modifier.size(9.dp))
-                Text("${day.rainChancePct}%", color = CyanPrimary, fontSize = 8.sp, fontWeight = FontWeight.Medium)
-            }
-            Spacer(Modifier.height(2.dp))
-            Text("${day.tempCelsius}°C", color = TextMuted, fontSize = 9.sp)
-        }
-    }
-}
 
-// ─── Latest Observation Card ─────────────────────────────────────────────────
-
-@Composable
-private fun LatestObservationCard(
-    obs: SatelliteObservation,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors   = CardDefaults.cardColors(containerColor = BgSurface),
-        shape    = RoundedCornerShape(20.dp),
-        border   = androidx.compose.foundation.BorderStroke(1.dp, CyanPrimary.copy(alpha = 0.25f))
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            // Provider row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(color = CyanContainer, shape = RoundedCornerShape(8.dp)) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Filled.Satellite, null, tint = CyanPrimary, modifier = Modifier.size(13.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            obs.provider.take(28),
-                            color = CyanPrimary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
-                        )
-                    }
-                }
-                Surface(color = EmeraldContainer, shape = RoundedCornerShape(6.dp)) {
-                    Text(
-                        "LIVE DATA",
-                        color = EmeraldPrimary,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            Text(obs.locationName, color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(2.dp))
-            Text(obs.detectedChange, color = TextSecondary, fontSize = 12.sp)
-            Spacer(Modifier.height(4.dp))
-            Text(obs.observationDate, color = TextMuted, fontSize = 10.sp)
-
-            Spacer(Modifier.height(14.dp))
-            HorizontalDivider(color = BgBorder)
-            Spacer(Modifier.height(14.dp))
-
-            // Telemetry chips
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TelemetryChip("SHIFT",    "${obs.groundShiftMmPerYr} mm/y", RiskCritical,  RiskCriticalContainer, Modifier.weight(1f))
-                TelemetryChip("NDVI",     "${obs.ndviIndex}",                EmeraldPrimary, EmeraldContainer,      Modifier.weight(1f))
-                TelemetryChip("MOISTURE", "${(obs.soilMoistureIndex * 100).toInt()}%", CyanPrimary, CyanContainer, Modifier.weight(1f))
-                TelemetryChip("SLOPE",    "${obs.slopeAngleDegrees}°",       PurplePrimary, PurpleContainer,        Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun TelemetryChip(
-    label: String, value: String,
-    accent: Color, bg: Color,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .padding(vertical = 9.dp, horizontal = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, color = accent, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-            Spacer(Modifier.height(2.dp))
-            Text(label, color = TextMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-        }
-    }
-}
-
-// ─── Pro Section Header ──────────────────────────────────────────────────────
-
-@Composable
-private fun ProSectionHeader(
-    title: String,
-    icon: ImageVector,
-    accentColor: Color,
-    badgeCount: Int = 0,
-    actionLabel: String = "",
-    onAction: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(9.dp))
-                .background(accentColor.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, null, tint = accentColor, modifier = Modifier.size(17.dp))
-        }
-        Spacer(Modifier.width(10.dp))
-        Text(title, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        if (badgeCount > 0) {
-            Spacer(Modifier.width(8.dp))
-            Surface(color = RiskCriticalContainer, shape = CircleShape) {
-                Text(
-                    "$badgeCount",
-                    color = RiskCritical,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        if (onAction != null && actionLabel.isNotBlank()) {
-            TextButton(onClick = onAction) {
-                Text(actionLabel, color = CyanPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Icon(Icons.Filled.ChevronRight, null, tint = CyanPrimary, modifier = Modifier.size(14.dp))
-            }
-        }
-    }
-}
-
-// ─── Alert Item Card ─────────────────────────────────────────────────────────
-
-@Composable
-private fun AlertItemCard(
-    alert: Alert,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val (accent, bg, glow) = riskColors(alert.severity)
-
-    Card(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors   = CardDefaults.cardColors(containerColor = BgSurface),
-        shape    = RoundedCornerShape(16.dp),
-        border   = androidx.compose.foundation.BorderStroke(1.dp, BgBorder)
-    ) {
-        Row(modifier = Modifier.height(86.dp)) {
-            // Left severity strip
             Box(
                 modifier = Modifier
-                    .width(5.dp)
                     .fillMaxHeight()
-                    .background(
-                        Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.4f)))
-                    )
+                    .width(1.dp)
+                    .align(Alignment.Center)
+                    .background(Color(0xFFC8D7CC))
             )
-            Row(
+
+            // Risk area indicators
+            parcels.take(5).forEachIndexed { index, parcel ->
+
+                val riskColor = when (parcel.riskCategory) {
+                    Severity.CRITICAL -> RiskCritical
+                    Severity.HIGH -> RiskHigh
+                    Severity.MODERATE -> RiskModerate
+                    Severity.LOW -> RiskLow
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(
+                            when (index) {
+                                0 -> 54.dp
+                                1 -> 44.dp
+                                2 -> 36.dp
+                                else -> 30.dp
+                            }
+                        )
+                        .align(
+                            when (index) {
+                                0 -> Alignment.TopStart
+                                1 -> Alignment.TopEnd
+                                2 -> Alignment.Center
+                                3 -> Alignment.BottomStart
+                                else -> Alignment.BottomEnd
+                            }
+                        )
+                        .padding(18.dp)
+                        .clip(CircleShape)
+                        .background(riskColor.copy(alpha = 0.65f))
+                        .border(
+                            2.dp,
+                            riskColor.copy(alpha = 0.9f),
+                            CircleShape
+                        )
+                )
+            }
+
+            Surface(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 14.dp),
+                    .align(Alignment.TopStart)
+                    .padding(12.dp),
+                color = Color.White.copy(alpha = 0.94f),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(
+                        horizontal = 10.dp,
+                        vertical = 7.dp
+                    ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(RiskLow)
+                    )
+
+                    Spacer(Modifier.width(6.dp))
+
+                    Text(
+                        text = "LIVE RISK MAP",
+                        color = TextPrimary,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.7.sp
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(12.dp),
+                color = Color.White.copy(alpha = 0.96f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(
+                        horizontal = 14.dp,
+                        vertical = 9.dp
+                    ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = BrandPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+
+                    Spacer(Modifier.width(6.dp))
+
+                    Text(
+                        text = "Open interactive map",
+                        color = BrandPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Spacer(Modifier.width(4.dp))
+
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = BrandPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// SATELLITE SUMMARY
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun SatelliteSummaryCard(
+    provider: String,
+    location: String,
+    observationDate: String,
+    ndvi: Double,
+    confidence: Int,
+    onClick: () -> Unit
+) {
+    LandGuardCard(
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+
+            Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Icon box
+
                 Box(
                     modifier = Modifier
                         .size(38.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(bg),
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(BrandContainer),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Warning, null, tint = accent, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        alert.title,
-                        color = TextPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    Icon(
+                        imageVector = Icons.Default.Satellite,
+                        contentDescription = null,
+                        tint = BrandPrimary,
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        alert.affectedLocation,
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(color = bg, shape = RoundedCornerShape(6.dp)) {
-                            Text(
-                                alert.severity.name,
-                                color = accent,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.8.sp,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Text(alert.timestamp, color = TextMuted, fontSize = 10.sp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("${alert.confidencePercentage}% conf.", color = TextMuted, fontSize = 10.sp)
-                    }
                 }
-                Icon(Icons.Filled.ChevronRight, null, tint = TextMuted, modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-}
 
-// ─── Parcel Item Card ────────────────────────────────────────────────────────
+                Spacer(Modifier.width(11.dp))
 
-@Composable
-private fun ParcelItemCard(
-    parcel: LandParcel,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val (accent, bg, glow) = riskColors(parcel.riskCategory)
-
-    Card(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors   = CardDefaults.cardColors(containerColor = BgSurface),
-        shape    = RoundedCornerShape(16.dp),
-        border   = androidx.compose.foundation.BorderStroke(1.dp, BgBorder)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    parcel.name,
-                    color = TextPrimary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.width(10.dp))
-                // Risk score badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(bg)
-                        .border(1.dp, accent.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                Column(
+                    modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        "${parcel.riskScore}%",
-                        color = accent,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold
+                        text = "Latest Satellite Observation",
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Spacer(Modifier.height(2.dp))
+
+                    Text(
+                        text = location,
+                        color = TextSecondary,
+                        fontSize = 11.sp
                     )
                 }
+
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = TextMuted,
+                    modifier = Modifier.size(20.dp)
+                )
             }
-            Spacer(Modifier.height(6.dp))
+
+            Spacer(Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+
+                SatelliteMetric(
+                    value = String.format("%.2f", ndvi),
+                    label = "NDVI",
+                    modifier = Modifier.weight(1f)
+                )
+
+                SatelliteMetric(
+                    value = "$confidence%",
+                    label = "Confidence",
+                    modifier = Modifier.weight(1f)
+                )
+
+                SatelliteMetric(
+                    value = observationDate,
+                    label = "Observed",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
             Text(
-                "${parcel.villageOrDistrict}, ${parcel.stateName}  •  ${parcel.areaHectares} ha",
-                color = TextSecondary,
-                fontSize = 11.sp,
+                text = provider,
+                color = TextMuted,
+                fontSize = 9.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(Modifier.height(10.dp))
-            HorizontalDivider(color = BgBorder)
-            Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    color = EmeraldContainer,
-                    shape = RoundedCornerShape(7.dp)
-                ) {
-                    Text(
-                        parcel.landType,
-                        color = EmeraldPrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("View on Radar", color = CyanPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Icon(Icons.Filled.ChevronRight, null, tint = CyanPrimary, modifier = Modifier.size(14.dp))
-                }
-            }
         }
     }
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+@Composable
+private fun SatelliteMetric(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(BgDeep)
+            .padding(10.dp)
+    ) {
+        Text(
+            text = value,
+            color = BrandPrimary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
 
-private data class RiskColors(val accent: Color, val bg: Color, val glow: Color)
+        Spacer(Modifier.height(2.dp))
 
-private fun riskColors(severity: Severity): RiskColors = when (severity) {
-    Severity.CRITICAL -> RiskColors(RiskCritical, RiskCriticalContainer, RiskCriticalGlow)
-    Severity.HIGH     -> RiskColors(RiskHigh,     RiskHighContainer,     RiskHighGlow)
-    Severity.MODERATE -> RiskColors(RiskModerate, RiskModerateContainer, RiskModerateGlow)
-    Severity.LOW      -> RiskColors(RiskLow,      RiskLowContainer,      RiskLowGlow)
+        Text(
+            text = label,
+            color = TextMuted,
+            fontSize = 9.sp
+        )
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// PARCEL SUMMARY
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun ParcelSummaryCard(
+    parcel: LandParcel,
+    onClick: () -> Unit
+) {
+    LandGuardCard(
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+
+        Row(
+            modifier = Modifier.padding(15.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        when (parcel.riskCategory) {
+                            Severity.CRITICAL -> com.example.landguard.ui.theme.RiskCriticalContainer
+                            Severity.HIGH -> com.example.landguard.ui.theme.RiskHighContainer
+                            Severity.MODERATE -> com.example.landguard.ui.theme.RiskModerateContainer
+                            Severity.LOW -> com.example.landguard.ui.theme.RiskLowContainer
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = when (parcel.riskCategory) {
+                        Severity.CRITICAL -> RiskCritical
+                        Severity.HIGH -> RiskHigh
+                        Severity.MODERATE -> RiskModerate
+                        Severity.LOW -> RiskLow
+                    },
+                    modifier = Modifier.size(21.dp)
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+
+                Text(
+                    text = parcel.name,
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(3.dp))
+
+                Text(
+                    text = "${parcel.villageOrDistrict}, ${parcel.stateName}",
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text = "${String.format("%.1f", parcel.areaHectares)} ha • ${parcel.landType}",
+                    color = TextMuted,
+                    fontSize = 10.sp
+                )
+            }
+
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+
+                RiskBadge(
+                    severity = parcel.riskCategory
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                Text(
+                    text = "${parcel.riskScore}/100",
+                    color = TextPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
 }

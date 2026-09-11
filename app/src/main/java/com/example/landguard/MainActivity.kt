@@ -5,16 +5,13 @@ package com.example.landguard
 import android.Manifest
 import android.os.Bundle
 import android.widget.Toast
+import dagger.hilt.android.AndroidEntryPoint
+import com.example.landguard.ui.satellite.SatelliteScreen
+import com.example.landguard.ui.parcels.ParcelsScreen
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,7 +21,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,47 +28,31 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Analytics
-import androidx.compose.material.icons.filled.Api
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.GpsFixed
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Landscape
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Radar
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,29 +61,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.LaunchedEffect
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.landguard.domain.model.Alert
+import com.example.landguard.domain.model.AlertStatus
+import com.example.landguard.ui.alerts.AlertHistoryViewModel
+import com.example.landguard.ui.alertdetail.AlertDetailViewModel
 import com.example.landguard.ui.home.HomeScreen
 import com.example.landguard.ui.map.MapScreen
+import com.example.landguard.ui.profile.ProfileScreen
 import com.example.landguard.ui.theme.BgBorder
 import com.example.landguard.ui.theme.BgDeep
-import com.example.landguard.ui.theme.BgElevated
 import com.example.landguard.ui.theme.BgSurface
-import com.example.landguard.ui.theme.CyanContainer
-import com.example.landguard.ui.theme.CyanPrimary
-import com.example.landguard.ui.theme.EmeraldContainer
-import com.example.landguard.ui.theme.EmeraldPrimary
+import com.example.landguard.ui.theme.BrandContainer
+import com.example.landguard.ui.theme.BrandPrimary
 import com.example.landguard.ui.theme.LandGuardTheme
-import com.example.landguard.ui.theme.PurpleContainer
-import com.example.landguard.ui.theme.PurplePrimary
 import com.example.landguard.ui.theme.RiskCritical
 import com.example.landguard.ui.theme.RiskCriticalContainer
 import com.example.landguard.ui.theme.RiskHigh
@@ -115,470 +91,617 @@ import com.example.landguard.ui.theme.RiskModerateContainer
 import com.example.landguard.ui.theme.TextMuted
 import com.example.landguard.ui.theme.TextPrimary
 import com.example.landguard.ui.theme.TextSecondary
-import com.example.landguard.ui.theme.TextWhite
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 
-// ─── Data Models ─────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═════════════════════════════════════════════════════════════════════
 
-
-
-private enum class Tab(val label: String, val icon: ImageVector) {
-    HOME    ("Overview",  Icons.Filled.Analytics),
-    MAP     ("Risk Map",  Icons.Filled.Radar),
-    ALERTS  ("Alerts",    Icons.Filled.Warning),
-    PROFILE ("Settings",  Icons.Filled.Settings)
+private enum class LandGuardTab(
+    val label: String
+) {
+    HOME("Home"),
+    MAP("Map"),
+    PARCELS("Parcels"),
+    ALERTS("Alerts"),
+    MORE("More")
 }
 
-// ─── Activity ────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════
+// ACTIVITY
+// ═════════════════════════════════════════════════════════════════════
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        /*
+         * FCM LandGuardFcmService puts alertId into the Intent.
+         *
+         * We preserve that behavior here.
+         */
         val alertId = intent.getStringExtra("alertId")
-        setContent { LandGuardTheme { LandGuardAppUI(alertId) } }
+
+        setContent {
+            LandGuardTheme {
+                LandGuardAppUI(
+                    notificationAlertId = alertId
+                )
+            }
+        }
     }
 }
 
+// ═════════════════════════════════════════════════════════════════════
+// ROOT UI
+// ═════════════════════════════════════════════════════════════════════
+
 @Composable
-private fun AlertDetailScreen(
-    alert: com.example.landguard.domain.model.Alert,
-    onBack: () -> Unit,
-    viewModel: com.example.landguard.ui.alertdetail.AlertDetailViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+private fun LandGuardAppUI(
+    notificationAlertId: String?
 ) {
-    val (accent, bg) = when (alert.severity.name) {
-        "CRITICAL" -> Pair(RiskCritical,  RiskCriticalContainer)
-        "HIGH"     -> Pair(RiskHigh,      RiskHighContainer)
-        "MODERATE" -> Pair(RiskModerate,  RiskModerateContainer)
-        else       -> Pair(RiskLow,       RiskLowContainer)
-    }
-    
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BgDeep)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(BgSurface)
-                .border(androidx.compose.foundation.BorderStroke(0.dp, BgBorder))
-                .padding(horizontal = 20.dp, vertical = 18.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Text("<", color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.width(8.dp))
-                Column {
-                    Text("Alert Details", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary, letterSpacing = (-0.3).sp)
-                    Text("ID: ${alert.id}", color = TextSecondary, fontSize = 12.sp)
-                }
+    var selectedTab by remember {
+        mutableStateOf(
+            if (notificationAlertId != null) {
+                LandGuardTab.ALERTS
+            } else {
+                LandGuardTab.HOME
             }
-        }
-        HorizontalDivider(color = BgBorder)
-        
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(alert.title, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text(alert.severity.name, color = accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text(alert.description, color = TextSecondary, fontSize = 14.sp)
-            Spacer(Modifier.height(16.dp))
-            Text("Location: ${alert.affectedLocation}", color = TextSecondary, fontSize = 14.sp)
-            Text("Status: ${alert.status.name}", color = TextMuted, fontSize = 14.sp)
-            
-            Spacer(Modifier.height(32.dp))
-            if (alert.status == com.example.landguard.domain.model.AlertStatus.NEW) {
-                Button(
-                    onClick = { 
-                        viewModel.updateAlertStatus(alert.id, com.example.landguard.domain.model.AlertStatus.ACKNOWLEDGED)
-                        onBack()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = BgDeep),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Acknowledge Alert")
-                }
-            }
-        }
+        )
     }
-}
 
-
-// ─── App UI Shell ────────────────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LandGuardAppUI(alertId: String? = null) {
-    var tab                by remember { mutableStateOf(if (alertId != null) Tab.ALERTS else Tab.HOME) }
-    var showLocationSheet  by remember { mutableStateOf(false) }
-    var selectedAlert      by remember { mutableStateOf<com.example.landguard.domain.model.Alert?>(null) }
-    var notifications      by remember { mutableStateOf(true) }
-    val snackbar            = remember { SnackbarHostState() }
-    val scope               = rememberCoroutineScope()
-    val context             = LocalContext.current
-
-    val locationLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-        val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true
-                || result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        Toast.makeText(context, if (granted) "GPS Locked ✓" else "GPS Permission Denied", Toast.LENGTH_SHORT).show()
+    var selectedAlert by remember {
+        mutableStateOf<Alert?>(null)
     }
+
+    var showSatelliteScreen by remember {
+        mutableStateOf(false)
+    }
+
+    var notificationsEnabled by remember {
+        mutableStateOf(true)
+    }
+
+    var showLocationSheet by remember {
+        mutableStateOf(false)
+    }
+
+    val snackbarHostState = remember {
+        SnackbarHostState()
+    }
+
+    val scope = rememberCoroutineScope()
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val locationLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { result ->
+
+            val granted =
+                result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                        result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+
+            Toast.makeText(
+                context,
+                if (granted) {
+                    "Location enabled"
+                } else {
+                    "Location permission denied"
+                },
+                Toast.LENGTH_SHORT
+            ).show()
+        }
 
     Scaffold(
         containerColor = BgDeep,
-        topBar = {
-            if (tab != Tab.MAP) ProTopBar(
-                onNotifications = { tab = Tab.ALERTS },
-                onGps           = { showLocationSheet = true },
-                notifications   = notifications
-            )
+
+        snackbarHost = {
+            SnackbarHost(snackbarHostState)
         },
-        snackbarHost = { SnackbarHost(snackbar) }
+
+        bottomBar = {
+            LandGuardBottomNavigation(
+                selectedTab = selectedTab,
+                alertCount = if (notificationsEnabled) 1 else 0,
+                onTabSelected = {
+                    selectedTab = it
+                }
+            )
+        }
     ) { padding ->
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(if (tab != Tab.MAP) padding else PaddingValues(0.dp))
+                .padding(
+                    PaddingValues(
+                        top = padding.calculateTopPadding()
+                    )
+                )
         ) {
-            // ── Screens ──────────────────────────────────────────────────────
-            when (tab) {
-                Tab.HOME    -> HomeScreen(
-                    onOpenAlert        = { scope.launch { snackbar.showSnackbar("Alert opened") } },
-                    onOpenMap          = { tab = Tab.MAP },
-                    onOpenAlertHistory = { tab = Tab.ALERTS },
-                    onOpenProfile      = { tab = Tab.PROFILE }
-                )
-                Tab.MAP     -> MapScreen(onOpenZone = { tab = Tab.HOME })
-                Tab.ALERTS  -> AlertsScreen(
-                    onAlert = { selectedAlert = it },
-                    targetAlertId = alertId
-                )
-                Tab.PROFILE -> ProfileScreen(
-                    notifications    = notifications,
-                    onNotifications  = { notifications = it },
-                    requestLocation  = {
-                        locationLauncher.launch(
-                            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                        )
-                    },
-                    onOpenSatelliteApi = { tab = Tab.MAP }
-                )
-            }
 
-            // ── Floating Navigation Bar ───────────────────────────────────────
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 16.dp, start = 20.dp, end = 20.dp)
-                    .height(64.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(BgSurface)
-                    .border(1.dp, BgBorder, RoundedCornerShape(32.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Tab.entries.forEach { item ->
-                        val isSelected = tab == item
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(50.dp)
-                                .clip(RoundedCornerShape(25.dp))
-                                .background(
-                                    if (isSelected)
-                                        Brush.linearGradient(listOf(CyanPrimary.copy(alpha = 0.2f), EmeraldPrimary.copy(alpha = 0.1f)))
-                                    else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
+            when (selectedTab) {
+
+                // ─────────────────────────────────────────────
+                // HOME
+                // ─────────────────────────────────────────────
+
+                LandGuardTab.HOME -> {
+
+                    HomeScreen(
+                        onOpenAlert = { alertId ->
+                            selectedTab = LandGuardTab.ALERTS
+
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    "Opening alert $alertId"
                                 )
-                                .border(
-                                    width = if (isSelected) 1.dp else 0.dp,
-                                    color = if (isSelected) CyanPrimary.copy(alpha = 0.4f) else Color.Transparent,
-                                    shape = RoundedCornerShape(25.dp)
-                                )
-                                .clickable { tab = item },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = item.icon,
-                                    contentDescription = item.label,
-                                    tint = if (isSelected) CyanPrimary else TextMuted,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                if (isSelected) {
-                                    Spacer(Modifier.width(5.dp))
-                                    Text(
-                                        item.label,
-                                        color      = CyanPrimary,
-                                        fontSize   = 11.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        maxLines   = 1,
-                                        letterSpacing = 0.3.sp
-                                    )
-                                }
                             }
+                        },
+
+                        onOpenMap = {
+                            selectedTab = LandGuardTab.MAP
+                        },
+
+                        onOpenAlertHistory = {
+                            selectedTab = LandGuardTab.ALERTS
+                        },
+
+                        onOpenProfile = {
+                            selectedTab = LandGuardTab.MORE
                         }
-                    }
-                }
-            }
-        }
-    }
-
-    // ── Location Bottom Sheet ─────────────────────────────────────────────────
-    if (showLocationSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showLocationSheet = false },
-            sheetState       = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor   = BgSurface,
-            tonalElevation   = 0.dp
-        ) {
-            Column(modifier = Modifier.padding(24.dp).padding(bottom = 32.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(CyanContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Filled.GpsFixed, null, tint = CyanPrimary, modifier = Modifier.size(22.dp))
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("Select Monitored Location", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Text("Target zone for risk analysis", color = TextSecondary, fontSize = 12.sp)
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                Button(
-                    onClick = {
-                        showLocationSheet = false
-                        locationLauncher.launch(
-                            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                    shape  = RoundedCornerShape(14.dp)
-                ) {
-                    Icon(Icons.Filled.GpsFixed, null, tint = Color(0xFF001822))
-                    Spacer(Modifier.width(10.dp))
-                    Text("USE DEVICE GPS", color = Color(0xFF001822), fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
-                }
-
-                Spacer(Modifier.height(16.dp))
-                Text("PRESET LOCATIONS", color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
-                Spacer(Modifier.height(10.dp))
-
-                listOf(
-                    "Kalimpong Ridge, West Bengal",
-                    "Teesta River Gorge, Sikkim",
-                    "Darjeeling Observatory Hill",
-                    "Siliguri Bypass Basin"
-                ).forEach { place ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(BgElevated)
-                            .border(1.dp, BgBorder, RoundedCornerShape(14.dp))
-                            .clickable {
-                                showLocationSheet = false
-                                scope.launch { snackbar.showSnackbar("Target locked: $place") }
-                            }
-                            .padding(16.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.LocationOn, null, tint = CyanPrimary, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(10.dp))
-                            Text(place, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                            Icon(Icons.Filled.ChevronRight, null, tint = TextMuted, modifier = Modifier.size(16.dp))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // ── Alert Detail Dialog ───────────────────────────────────────────────────
-    selectedAlert?.let { alert ->
-        AlertDialog(
-            onDismissRequest = { selectedAlert = null },
-            containerColor   = BgSurface,
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(RiskCriticalContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Filled.Warning, null, tint = RiskCritical, modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        Text("LAND RISK ALERT", color = RiskCritical, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 1.sp)
-                        Text(alert.severity.name, color = TextSecondary, fontSize = 11.sp)
-                    }
-                }
-            },
-            text = {
-                Column {
-                    Text(alert.title, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(6.dp))
-                    Text(alert.affectedLocation, color = TextSecondary, fontSize = 12.sp)
-                    Spacer(Modifier.height(4.dp))
-                    Text(alert.timestamp.takeIf { it.isNotBlank() } ?: "Just now", color = TextMuted, fontSize = 11.sp)
-                    Spacer(Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("RISK CONFIDENCE", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                        Text("${alert.confidencePercentage}%", color = RiskCritical, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress         = { alert.confidencePercentage / 100f },
-                        modifier         = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
-                        color            = RiskCritical,
-                        trackColor       = BgBorder
                     )
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        selectedAlert = null
-                        scope.launch { snackbar.showSnackbar("Alert acknowledged") }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                    shape  = RoundedCornerShape(10.dp)
-                ) {
-                    Text("ACKNOWLEDGE", color = Color(0xFF001822), fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 0.8.sp)
+
+                // ─────────────────────────────────────────────
+                // MAP
+                // ─────────────────────────────────────────────
+
+                LandGuardTab.MAP -> {
+
+                    MapScreen(
+                        onOpenZone = { zoneId ->
+
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    "Selected zone: $zoneId"
+                                )
+                            }
+                        }
+                    )
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { selectedAlert = null }) {
-                    Text("CLOSE", color = TextMuted)
+
+                // ─────────────────────────────────────────────
+                // PARCELS
+                // ─────────────────────────────────────────────
+
+                LandGuardTab.PARCELS -> {
+
+                    com.example.landguard.ui.parcels.ParcelsScreen(
+                        onOpenMap = {
+                            selectedTab = LandGuardTab.MAP
+                        }
+                    )
+                }
+
+                // ─────────────────────────────────────────────
+                // ALERTS
+                // ─────────────────────────────────────────────
+
+                LandGuardTab.ALERTS -> {
+
+                    AlertsTabScreen(
+                        notificationAlertId = notificationAlertId,
+                        onAlertSelected = {
+                            selectedAlert = it
+                        }
+                    )
+                }
+
+                // ─────────────────────────────────────────────
+                // MORE
+                // ─────────────────────────────────────────────
+
+                LandGuardTab.MORE -> {
+                    com.example.landguard.ui.more.MoreScreen(
+                        onOpenProfile = {
+                            // Profile screen will be connected here
+                        },
+                        onOpenSatellite = {
+                            showSatelliteScreen = true
+                        },
+                        onOpenReports = {
+                            showSatelliteScreen = true
+                            // Reports screen will be connected next
+                        },
+                        onOpenSettings = {
+                            // Existing ProfileScreen/settings will be connected here
+                        }
+                    )
                 }
             }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ALERT DETAIL
+    // ═══════════════════════════════════════════════════════════
+
+    selectedAlert?.let { alert ->
+
+        AlertDetailBottomSheet(
+            alert = alert,
+            onDismiss = {
+                selectedAlert = null
+            }
         )
+    }
+
+    if (showSatelliteScreen) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                showSatelliteScreen = false
+            },
+            sheetState = rememberModalBottomSheetState(
+                skipPartiallyExpanded = true
+            ),
+            containerColor = BgDeep
+        ) {
+            SatelliteScreen(
+                onBack = {
+                    showSatelliteScreen = false
+                }
+            )
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // LOCATION
+    // ═══════════════════════════════════════════════════════════
+
+    if (showLocationSheet) {
+
+        ModalBottomSheet(
+            onDismissRequest = {
+                showLocationSheet = false
+            },
+
+            sheetState = rememberModalBottomSheetState(
+                skipPartiallyExpanded = true
+            ),
+
+            containerColor = BgSurface
+        ) {
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = 22.dp,
+                        end = 22.dp,
+                        bottom = 36.dp
+                    )
+            ) {
+
+                Text(
+                    text = "Your Location",
+                    color = TextPrimary,
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                Text(
+                    text = "Use your device location to center the land monitoring map.",
+                    color = TextSecondary,
+                    fontSize = 13.sp
+                )
+
+                Spacer(Modifier.height(22.dp))
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showLocationSheet = false
+
+                            locationLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        },
+
+                    shape = RoundedCornerShape(16.dp),
+                    color = BrandContainer
+                ) {
+
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(BrandPrimary),
+
+                            contentAlignment = Alignment.Center
+                        ) {
+
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                        }
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+
+                            Text(
+                                text = "Use Device Location",
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            Spacer(Modifier.height(3.dp))
+
+                            Text(
+                                text = "Center the map on your current position.",
+                                color = TextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                TextButton(
+                    onClick = {
+                        showLocationSheet = false
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+
+                    Text(
+                        text = "Cancel",
+                        color = TextSecondary
+                    )
+                }
+            }
+        }
     }
 }
 
+// ═════════════════════════════════════════════════════════════════════
+// BOTTOM NAVIGATION
+// ═════════════════════════════════════════════════════════════════════
+
 @Composable
-private fun ProTopBar(
-    onNotifications: () -> Unit,
-    onGps: () -> Unit,
-    notifications: Boolean
+private fun LandGuardBottomNavigation(
+    selectedTab: LandGuardTab,
+    alertCount: Int,
+    onTabSelected: (LandGuardTab) -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "topbar_pulse")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f, targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "topbar_dot"
-    )
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(BgDeep)
+    Surface(
+        color = BgSurface,
+        tonalElevation = 0.dp,
+        shadowElevation = 8.dp
     ) {
-        HorizontalDivider(
-            modifier = Modifier.align(Alignment.BottomCenter),
-            color = BgBorder
-        )
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .navigationBarsPadding()
+                .height(72.dp)
+                .padding(
+                    horizontal = 6.dp,
+                    vertical = 5.dp
+                ),
+
+            horizontalArrangement = Arrangement.SpaceEvenly,
+
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Logo
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.linearGradient(listOf(CyanContainer, EmeraldContainer))
-                    )
-                    .border(1.dp, CyanPrimary.copy(alpha = 0.4f), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Filled.Landscape, null, tint = CyanPrimary, modifier = Modifier.size(22.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("LandGuard", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = TextPrimary, letterSpacing = (-0.3).sp)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(EmeraldPrimary.copy(alpha = dotAlpha))
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    Text(
-                        "SATELLITE RISK PLATFORM",
-                        fontSize    = 8.sp,
-                        letterSpacing = 1.6.sp,
-                        color       = CyanPrimary,
-                        fontWeight  = FontWeight.Bold
-                    )
+
+            BottomNavItem(
+                tab = LandGuardTab.HOME,
+                icon = Icons.Default.Home,
+                selected = selectedTab == LandGuardTab.HOME,
+                onClick = {
+                    onTabSelected(LandGuardTab.HOME)
                 }
-            }
-            // Notifications
-            BadgedBox(badge = {
-                if (notifications) Badge(containerColor = RiskCritical) {
-                    Text("3", color = Color.White, fontSize = 8.sp)
+            )
+
+            BottomNavItem(
+                tab = LandGuardTab.MAP,
+                icon = Icons.Default.LocationOn,
+                selected = selectedTab == LandGuardTab.MAP,
+                onClick = {
+                    onTabSelected(LandGuardTab.MAP)
                 }
-            }) {
-                IconButton(onClick = onNotifications) {
-                    Icon(Icons.Filled.Notifications, null, tint = TextPrimary)
+            )
+
+            BottomNavItem(
+                tab = LandGuardTab.PARCELS,
+                icon = Icons.Default.Layers,
+                selected = selectedTab == LandGuardTab.PARCELS,
+                onClick = {
+                    onTabSelected(LandGuardTab.PARCELS)
                 }
-            }
-            // GPS
-            IconButton(onClick = onGps) {
-                Icon(Icons.Filled.GpsFixed, null, tint = CyanPrimary)
-            }
+            )
+
+            BottomNavItem(
+                tab = LandGuardTab.ALERTS,
+                icon = Icons.Default.Warning,
+                selected = selectedTab == LandGuardTab.ALERTS,
+                badge = alertCount,
+                onClick = {
+                    onTabSelected(LandGuardTab.ALERTS)
+                }
+            )
+
+            BottomNavItem(
+                tab = LandGuardTab.MORE,
+                icon = Icons.Default.Person,
+                selected = selectedTab == LandGuardTab.MORE,
+                onClick = {
+                    onTabSelected(LandGuardTab.MORE)
+                }
+            )
         }
     }
 }
 
 @Composable
-private fun AlertsScreen(
-    onAlert: (com.example.landguard.domain.model.Alert) -> Unit,
-    targetAlertId: String? = null,
-    viewModel: com.example.landguard.ui.alerts.AlertHistoryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+private fun BottomNavItem(
+    tab: LandGuardTab,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    badge: Int = 0,
+    onClick: () -> Unit
 ) {
-    val list by viewModel.history.collectAsState()
-    var criticalOnly by remember { mutableStateOf(false) }
-    
-    androidx.compose.runtime.LaunchedEffect(targetAlertId, list) {
-        if (targetAlertId != null && list.isNotEmpty()) {
-            val alert = list.find { it.id == targetAlertId }
-            if (alert != null) {
-                onAlert(alert)
+    Column(
+        modifier = Modifier
+            .width(68.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(
+                vertical = 5.dp
+            ),
+
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+
+        BadgedBox(
+            badge = {
+
+                if (badge > 0) {
+
+                    Badge(
+                        containerColor = RiskCritical
+                    ) {
+                        Text(
+                            text = if (badge > 9) "9+" else badge.toString(),
+                            color = Color.White,
+                            fontSize = 8.sp
+                        )
+                    }
+                }
             }
+        ) {
+
+            Icon(
+                imageVector = icon,
+                contentDescription = tab.label,
+
+                tint = if (selected) {
+                    BrandPrimary
+                } else {
+                    TextMuted
+                },
+
+                modifier = Modifier.size(22.dp)
+            )
+        }
+
+        Spacer(Modifier.height(3.dp))
+
+        Text(
+            text = tab.label,
+
+            color = if (selected) {
+                BrandPrimary
+            } else {
+                TextMuted
+            },
+
+            fontSize = 10.sp,
+
+            fontWeight = if (selected) {
+                FontWeight.Bold
+            } else {
+                FontWeight.Medium
+            }
+        )
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// ALERTS
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun AlertsTabScreen(
+    notificationAlertId: String?,
+    onAlertSelected: (Alert) -> Unit,
+
+    viewModel: AlertHistoryViewModel = hiltViewModel()
+) {
+    val alerts by viewModel.history.collectAsStateWithLifecycle()
+
+    var selectedFilter by remember {
+        mutableStateOf("All")
+    }
+
+    val filteredAlerts = when (selectedFilter) {
+
+        "Critical" ->
+            alerts.filter {
+                it.severity.name == "CRITICAL"
+            }
+
+        "High" ->
+            alerts.filter {
+                it.severity.name == "HIGH"
+            }
+
+        "Medium" ->
+            alerts.filter {
+                it.severity.name == "MODERATE"
+            }
+
+        else -> alerts
+    }
+
+    /*
+     * FCM notification handling.
+     *
+     * When MainActivity was opened with alertId,
+     * find that exact alert and open it.
+     */
+    LaunchedEffect(
+        notificationAlertId,
+        alerts
+    ) {
+
+        if (
+            notificationAlertId != null &&
+            alerts.isNotEmpty()
+        ) {
+
+            alerts
+                .firstOrNull {
+                    it.id == notificationAlertId
+                }
+                ?.let {
+                    onAlertSelected(it)
+                }
         }
     }
 
@@ -587,253 +710,794 @@ private fun AlertsScreen(
             .fillMaxSize()
             .background(BgDeep)
     ) {
+
         // Header
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(BgSurface)
-                .border(androidx.compose.foundation.BorderStroke(0.dp, BgBorder))
-                .padding(horizontal = 20.dp, vertical = 18.dp)
+                .padding(
+                    start = 18.dp,
+                    end = 18.dp,
+                    top = 20.dp,
+                    bottom = 10.dp
+                )
         ) {
-            Column {
-                Text("Risk Alert Feed", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary, letterSpacing = (-0.3).sp)
-                Spacer(Modifier.height(4.dp))
-                Text("Real-time satellite displacement events", color = TextSecondary, fontSize = 13.sp)
-                Spacer(Modifier.height(14.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Critical & High only", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = criticalOnly,
-                        onCheckedChange = { criticalOnly = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor  = CyanPrimary,
-                            checkedTrackColor  = CyanContainer,
-                            uncheckedThumbColor = TextMuted,
-                            uncheckedTrackColor = BgElevated
-                        )
-                    )
-                }
-            }
-        }
 
-        HorizontalDivider(color = BgBorder)
-
-        LazyColumn(
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            val filtered = list.filter { !criticalOnly || it.severity.name in listOf("CRITICAL", "HIGH") }
-            items(filtered) { alert ->
-                AlertFeedCard(alert = alert, onClick = { onAlert(alert) })
-            }
-            item { Spacer(Modifier.height(100.dp)) }
-        }
-    }
-}
-
-@Composable
-private fun AlertFeedCard(alert: com.example.landguard.domain.model.Alert, onClick: () -> Unit) {
-    val (accent, bg) = when (alert.severity.name) {
-        "CRITICAL" -> Pair(RiskCritical,  RiskCriticalContainer)
-        "HIGH"     -> Pair(RiskHigh,      RiskHighContainer)
-        "MODERATE" -> Pair(RiskModerate,  RiskModerateContainer)
-        else       -> Pair(RiskLow,       RiskLowContainer)
-    }
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors   = CardDefaults.cardColors(containerColor = BgSurface),
-        shape    = RoundedCornerShape(16.dp),
-        border   = androidx.compose.foundation.BorderStroke(1.dp, BgBorder)
-    ) {
-        Row(modifier = Modifier.height(90.dp)) {
-            Box(
-                modifier = Modifier
-                    .width(5.dp)
-                    .fillMaxHeight()
-                    .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.3f))))
+            Text(
+                text = "Alerts",
+                color = TextPrimary,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold
             )
+
+            Spacer(Modifier.height(4.dp))
+
+            Text(
+                text = "Stay informed about changes affecting your land.",
+                color = TextSecondary,
+                fontSize = 12.sp
+            )
+
+            Spacer(Modifier.height(16.dp))
+
             Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(bg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Filled.Warning, null, tint = accent, modifier = Modifier.size(18.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(alert.title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(3.dp))
-                    Text("${alert.affectedLocation}  •  ${alert.timestamp.takeIf { it.isNotBlank() } ?: "Just now"}", color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(color = bg, shape = RoundedCornerShape(5.dp)) {
-                            Text(alert.severity.name, color = accent, fontSize = 8.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
+
+                listOf(
+                    "All",
+                    "Critical",
+                    "High",
+                    "Medium"
+                ).forEach { filter ->
+
+                    AlertFilterChip(
+                        text = filter,
+                        selected = selectedFilter == filter,
+                        onClick = {
+                            selectedFilter = filter
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Text("Status: ${alert.status.name}", color = TextMuted, fontSize = 10.sp)
-                    }
-                }
-                Icon(Icons.Filled.ChevronRight, null, tint = TextMuted, modifier = Modifier.size(16.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileScreen(
-    notifications: Boolean,
-    onNotifications: (Boolean) -> Unit,
-    requestLocation: () -> Unit,
-    onOpenSatelliteApi: () -> Unit
-) {
-    var safety by remember { mutableStateOf(true) }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BgDeep),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Header
-        item {
-            Column(modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)) {
-                Text("System Settings", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary, letterSpacing = (-0.3).sp)
-                Text("Configure LandGuard monitoring parameters", color = TextSecondary, fontSize = 13.sp)
-            }
-        }
-
-        // Operator card
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(
-                        Brush.linearGradient(listOf(CyanContainer, EmeraldContainer.copy(alpha = 0.5f)))
                     )
-                    .border(1.dp, CyanPrimary.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
-                    .padding(20.dp)
+                }
+            }
+        }
+
+        if (filteredAlerts.isEmpty()) {
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(58.dp)
                             .clip(CircleShape)
-                            .background(Brush.linearGradient(listOf(CyanPrimary, EmeraldPrimary))),
+                            .background(BrandContainer),
+
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Filled.Person, null, tint = Color(0xFF001822), modifier = Modifier.size(28.dp))
+
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = BrandPrimary,
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
-                    Spacer(Modifier.width(16.dp))
-                    Column {
-                        Text("GIS Field Specialist", fontWeight = FontWeight.ExtraBold, color = TextPrimary, fontSize = 16.sp)
-                        Text("Land Monitoring Operator", color = CyanPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(4.dp))
-                        Surface(color = EmeraldContainer, shape = RoundedCornerShape(6.dp)) {
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        text = "No alerts found",
+                        color = TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Text(
+                        text = "Your monitored land is quiet.",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+        } else {
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 8.dp,
+                    bottom = 18.dp
+                ),
+
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+
+                items(
+                    items = filteredAlerts,
+                    key = { it.id }
+                ) { alert ->
+
+                    com.example.landguard.ui.components.LandGuardAlertCard(
+                        title = alert.title,
+                        location = alert.affectedLocation.ifBlank {
+                            "Location unavailable"
+                        },
+                        timestamp = alert.timestamp.ifBlank {
+                            "Recently detected"
+                        },
+                        severity = alert.severity,
+                        description = alert.description,
+                        onClick = {
+                            onAlertSelected(alert)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlertFilterChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.clickable(onClick = onClick),
+
+        color = if (selected) {
+            BrandPrimary
+        } else {
+            BgSurface
+        },
+
+        shape = RoundedCornerShape(20.dp),
+
+        border = if (!selected) {
+            androidx.compose.foundation.BorderStroke(
+                1.dp,
+                BgBorder
+            )
+        } else {
+            null
+        }
+    ) {
+
+        Text(
+            text = text,
+
+            color = if (selected) {
+                Color.White
+            } else {
+                TextSecondary
+            },
+
+            fontSize = 11.sp,
+
+            fontWeight = if (selected) {
+                FontWeight.Bold
+            } else {
+                FontWeight.Medium
+            },
+
+            modifier = Modifier.padding(
+                horizontal = 14.dp,
+                vertical = 8.dp
+            )
+        )
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// PARCELS TEMPORARY SCREEN
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun ParcelsTabScreen(
+    onOpenMap: () -> Unit
+) {
+    val viewModel: com.example.landguard.ui.home.HomeViewModel =
+        hiltViewModel()
+
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BgDeep)
+            .padding(horizontal = 16.dp)
+    ) {
+
+        Spacer(Modifier.height(20.dp))
+
+        Text(
+            text = "Parcels",
+            color = TextPrimary,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            text = "Your monitored land areas",
+            color = TextSecondary,
+            fontSize = 12.sp
+        )
+
+        Spacer(Modifier.height(18.dp))
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+
+            contentPadding = PaddingValues(
+                bottom = 90.dp
+            )
+        ) {
+
+            items(
+                items = state.parcels,
+                key = { it.id }
+            ) { parcel ->
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onOpenMap),
+
+                    color = BgSurface,
+                    shape = RoundedCornerShape(16.dp),
+
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        BgBorder
+                    )
+                ) {
+
+                    Row(
+                        modifier = Modifier.padding(15.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    when (parcel.riskCategory.name) {
+                                        "CRITICAL" -> RiskCriticalContainer
+                                        "HIGH" -> RiskHighContainer
+                                        "MODERATE" -> RiskModerateContainer
+                                        else -> RiskLowContainer
+                                    }
+                                ),
+
+                            contentAlignment = Alignment.Center
+                        ) {
+
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+
+                                tint = when (parcel.riskCategory.name) {
+                                    "CRITICAL" -> RiskCritical
+                                    "HIGH" -> RiskHigh
+                                    "MODERATE" -> RiskModerate
+                                    else -> RiskLow
+                                },
+
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+
                             Text(
-                                "AUTHORIZED  •  LEVEL 3",
-                                color = EmeraldPrimary,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 1.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                text = parcel.name,
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            Spacer(Modifier.height(3.dp))
+
+                            Text(
+                                text = parcel.villageOrDistrict,
+                                color = TextSecondary,
+                                fontSize = 11.sp
+                            )
+
+                            Spacer(Modifier.height(4.dp))
+
+                            Text(
+                                text = "${parcel.areaHectares} ha • ${parcel.landType}",
+                                color = TextMuted,
+                                fontSize = 10.sp
+                            )
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.End
+                        ) {
+
+                            Text(
+                                text = parcel.riskCategory.name,
+                                color = when (parcel.riskCategory.name) {
+                                    "CRITICAL" -> RiskCritical
+                                    "HIGH" -> RiskHigh
+                                    "MODERATE" -> RiskModerate
+                                    else -> RiskLow
+                                },
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Spacer(Modifier.height(4.dp))
+
+                            Text(
+                                text = "${parcel.riskScore}/100",
+                                color = TextPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
             }
         }
+    }
+}
 
-        // System config section
-        item { SectionLabel("SYSTEM CONFIGURATION") }
-        item { SettingCard("Satellite Backend Routes", "Configure server gateways & API endpoints", Icons.Filled.Api,       CyanPrimary,    null,          { onOpenSatelliteApi() }) }
-        item { SettingCard("GPS Positioning",          "Enable device-based location lock",          Icons.Filled.LocationOn, EmeraldPrimary, null,          { requestLocation() }) }
+// ═════════════════════════════════════════════════════════════════════
+// MORE
+// ═════════════════════════════════════════════════════════════════════
 
-        // Preferences section
-        item { SectionLabel("PREFERENCES") }
-        item { SettingCard("Critical Push Alerts",    "Notifications for displacement events",      Icons.Filled.Notifications, RiskCritical, notifications, onNotifications) }
-        item { SettingCard("Safety & Emergency Mode", "Keep emergency tools prominent",             Icons.Filled.Security,      EmeraldPrimary, safety,       { safety = it }) }
+@Composable
+private fun MoreTabScreen(
+    notificationsEnabled: Boolean,
+    onNotificationsChanged: (Boolean) -> Unit,
+    onLocationRequest: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BgDeep)
+            .padding(horizontal = 16.dp)
+    ) {
 
-        // Info
-        item { SectionLabel("ABOUT") }
-        item { SettingCard("About LandGuard Pro",     "v3.0 • Stellar Command Edition • 2026",     Icons.Filled.Info, PurplePrimary, null, {}) }
+        Spacer(Modifier.height(20.dp))
 
-        item { Spacer(Modifier.height(100.dp)) }
+        Text(
+            text = "More",
+            color = TextPrimary,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            text = "LandGuard preferences and tools",
+            color = TextSecondary,
+            fontSize = 12.sp
+        )
+
+        Spacer(Modifier.height(18.dp))
+
+        // Profile card
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = BrandContainer,
+            shape = RoundedCornerShape(18.dp)
+        ) {
+
+            Row(
+                modifier = Modifier.padding(17.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Box(
+                    modifier = Modifier
+                        .size(50.dp)
+                        .clip(CircleShape)
+                        .background(BrandPrimary),
+
+                    contentAlignment = Alignment.Center
+                ) {
+
+                    Text(
+                        text = "E",
+                        color = Color.White,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(Modifier.width(12.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+
+                    Text(
+                        text = "Land Explorer",
+                        color = TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(Modifier.height(3.dp))
+
+                    Text(
+                        text = "LandGuard user",
+                        color = TextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+
+        Text(
+            text = "TOOLS",
+            color = TextMuted,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        MoreRow(
+            icon = Icons.Default.Layers,
+            title = "Satellite Data",
+            subtitle = "Explore recent observations",
+            onClick = {}
+        )
+
+        MoreRow(
+            icon = Icons.Default.Warning,
+            title = "Reports",
+            subtitle = "Risk summaries and reports",
+            onClick = {}
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            text = "SETTINGS",
+            color = TextMuted,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        MoreRow(
+            icon = Icons.Default.Notifications,
+            title = "Notifications",
+            subtitle = if (notificationsEnabled) {
+                "Alerts are enabled"
+            } else {
+                "Alerts are disabled"
+            },
+            onClick = {
+                onNotificationsChanged(!notificationsEnabled)
+            }
+        )
+
+        MoreRow(
+            icon = Icons.Default.LocationOn,
+            title = "Location",
+            subtitle = "Choose device location",
+            onClick = onLocationRequest
+        )
+
+        MoreRow(
+            icon = Icons.Default.Person,
+            title = "Profile",
+            subtitle = "Account information",
+            onClick = {}
+        )
     }
 }
 
 @Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text,
-        color        = TextMuted,
-        fontSize     = 10.sp,
-        fontWeight   = FontWeight.ExtraBold,
-        letterSpacing = 1.8.sp,
-        modifier     = Modifier.padding(top = 4.dp, bottom = 2.dp)
-    )
+private fun MoreRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .clickable(onClick = onClick),
+
+        color = BgSurface,
+        shape = RoundedCornerShape(15.dp),
+
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            BgBorder
+        )
+    ) {
+
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(BrandContainer),
+
+                contentAlignment = Alignment.Center
+            ) {
+
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = BrandPrimary,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+
+                Text(
+                    text = title,
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(Modifier.height(2.dp))
+
+                Text(
+                    text = subtitle,
+                    color = TextSecondary,
+                    fontSize = 10.sp
+                )
+            }
+
+            Text(
+                text = "›",
+                color = TextMuted,
+                fontSize = 22.sp
+            )
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// ALERT DETAIL
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun AlertDetailBottomSheet(
+    alert: Alert,
+    onDismiss: () -> Unit
+) {
+    val viewModel: AlertDetailViewModel = hiltViewModel()
+
+    val severityColor = when (alert.severity.name) {
+        "CRITICAL" -> RiskCritical
+        "HIGH" -> RiskHigh
+        "MODERATE" -> RiskModerate
+        else -> RiskLow
+    }
+
+    val severityBackground = when (alert.severity.name) {
+        "CRITICAL" -> RiskCriticalContainer
+        "HIGH" -> RiskHighContainer
+        "MODERATE" -> RiskModerateContainer
+        else -> RiskLowContainer
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = BgSurface
+    ) {
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = 20.dp,
+                    end = 20.dp,
+                    bottom = 30.dp
+                )
+        ) {
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(severityBackground),
+
+                    contentAlignment = Alignment.Center
+                ) {
+
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = severityColor,
+                        modifier = Modifier.size(23.dp)
+                    )
+                }
+
+                Spacer(Modifier.width(12.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+
+                    Text(
+                        text = "Land Risk Alert",
+                        color = TextMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    Spacer(Modifier.height(3.dp))
+
+                    Text(
+                        text = alert.severity.name,
+                        color = severityColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+
+            Text(
+                text = alert.title,
+                color = TextPrimary,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = alert.description.ifBlank {
+                    "A land-risk event has been detected in the monitored area."
+                },
+                color = TextSecondary,
+                fontSize = 13.sp
+            )
+
+            Spacer(Modifier.height(18.dp))
+
+            AlertDetailRow(
+                label = "Location",
+                value = alert.affectedLocation.ifBlank {
+                    "Unknown"
+                }
+            )
+
+            AlertDetailRow(
+                label = "Detected Event",
+                value = alert.detectedEvent.ifBlank {
+                    "Land change detected"
+                }
+            )
+
+            AlertDetailRow(
+                label = "Confidence",
+                value = "${alert.confidencePercentage}%"
+            )
+
+            AlertDetailRow(
+                label = "Status",
+                value = alert.status.name
+            )
+
+            AlertDetailRow(
+                label = "Source",
+                value = alert.sourceProvider
+            )
+
+            Spacer(Modifier.height(18.dp))
+
+            if (alert.status == AlertStatus.NEW) {
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+
+                            viewModel.updateAlertStatus(
+                                alert.id,
+                                AlertStatus.ACKNOWLEDGED
+                            )
+
+                            onDismiss()
+                        },
+
+                    color = BrandPrimary,
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 15.dp),
+
+                        contentAlignment = Alignment.Center
+                    ) {
+
+                        Text(
+                            text = "Acknowledge Alert",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
-private fun SettingCard(
-    title: String, subtitle: String,
-    icon: ImageVector, accent: Color,
-    value: Boolean?, action: (Boolean) -> Unit
+private fun AlertDetailRow(
+    label: String,
+    value: String
 ) {
-    Card(
-        onClick = { if (value == null) action(true) },
-        colors  = CardDefaults.cardColors(containerColor = BgSurface),
-        shape   = RoundedCornerShape(16.dp),
-        border  = androidx.compose.foundation.BorderStroke(1.dp, BgBorder)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 7.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(accent.copy(alpha = 0.12f))
-                    .border(1.dp, accent.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, null, tint = accent, modifier = Modifier.size(20.dp))
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title,    fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
-                Text(subtitle, color = TextSecondary, fontSize = 11.sp)
-            }
-            if (value != null) {
-                Switch(
-                    checked          = value,
-                    onCheckedChange  = action,
-                    colors           = SwitchDefaults.colors(
-                        checkedThumbColor   = accent,
-                        checkedTrackColor   = accent.copy(alpha = 0.2f),
-                        uncheckedThumbColor = TextMuted,
-                        uncheckedTrackColor = BgElevated
-                    )
-                )
-            } else {
-                Icon(Icons.Filled.ChevronRight, null, tint = TextMuted, modifier = Modifier.size(18.dp))
-            }
-        }
+
+        Text(
+            text = label,
+            color = TextMuted,
+            fontSize = 11.sp,
+            modifier = Modifier.width(105.dp)
+        )
+
+        Text(
+            text = value,
+            color = TextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
