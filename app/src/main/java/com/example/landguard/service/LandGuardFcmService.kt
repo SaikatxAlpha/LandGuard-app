@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import com.example.landguard.MainActivity
 import com.example.landguard.data.network.DeviceRegisterRequest
 import com.example.landguard.data.network.LandGuardApiService
+import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
@@ -23,30 +24,85 @@ class LandGuardFcmService : FirebaseMessagingService() {
     @Inject
     lateinit var apiService: LandGuardApiService
 
+    override fun onCreate() {
+        super.onCreate()
+
+        // Get the current FCM token when the Firebase service is created.
+        // This covers cases where onNewToken() was not triggered recently.
+        FirebaseMessaging.getInstance().token
+            .addOnCompleteListener { task ->
+                if (!task.isSuccessful) {
+                    task.exception?.printStackTrace()
+                    return@addOnCompleteListener
+                }
+
+                val token = task.result
+
+                if (!token.isNullOrBlank()) {
+                    registerToken(token)
+                }
+            }
+    }
+
     override fun onNewToken(token: String) {
         super.onNewToken(token)
+
+        registerToken(token)
+    }
+
+    private fun registerToken(token: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                apiService.registerDevice(DeviceRegisterRequest(token))
+                apiService.registerDevice(
+                    DeviceRegisterRequest(token)
+                )
+
+                android.util.Log.d(
+                    "LandGuardFCM",
+                    "FCM token registered successfully"
+                )
+
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e(
+                    "LandGuardFCM",
+                    "Failed to register FCM token",
+                    e
+                )
             }
         }
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
-        
-        val title = message.notification?.title ?: message.data["title"] ?: "LandGuard Alert"
-        val body = message.notification?.body ?: message.data["body"] ?: "New alert received."
+
+        val title =
+            message.notification?.title
+                ?: message.data["title"]
+                ?: "LandGuard Alert"
+
+        val body =
+            message.notification?.body
+                ?: message.data["body"]
+                ?: "New alert received."
+
         val alertId = message.data["alertId"]
 
-        showNotification(title, body, alertId)
+        showNotification(
+            title = title,
+            body = body,
+            alertId = alertId
+        )
     }
 
-    private fun showNotification(title: String, body: String, alertId: String?) {
+    private fun showNotification(
+        title: String,
+        body: String,
+        alertId: String?
+    ) {
         val channelId = "landguard_alerts"
-        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+
+        val notificationManager =
+            getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -54,11 +110,15 @@ class LandGuardFcmService : FirebaseMessagingService() {
                 "Emergency Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             )
+
             notificationManager.createNotificationChannel(channel)
         }
 
         val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags =
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TASK
+
             if (alertId != null) {
                 putExtra("alertId", alertId)
             }
@@ -68,18 +128,24 @@ class LandGuardFcmService : FirebaseMessagingService() {
             this,
             alertId?.hashCode() ?: 0,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                    PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .build()
+        val notification =
+            NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(pendingIntent)
+                .build()
 
-        notificationManager.notify(alertId?.hashCode() ?: System.currentTimeMillis().toInt(), notification)
+        notificationManager.notify(
+            alertId?.hashCode()
+                ?: System.currentTimeMillis().toInt(),
+            notification
+        )
     }
 }

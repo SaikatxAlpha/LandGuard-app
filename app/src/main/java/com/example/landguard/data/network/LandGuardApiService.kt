@@ -8,7 +8,10 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 data class StatusUpdateRequest(val status: String)
-data class DeviceRegisterRequest(val token: String)
+data class DeviceRegisterRequest(
+    val token: String,
+    val platform: String = "android"
+)
 
 interface LandGuardApiService {
     @GET("alerts")

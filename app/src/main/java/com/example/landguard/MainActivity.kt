@@ -92,6 +92,11 @@ import com.example.landguard.ui.theme.TextMuted
 import com.example.landguard.ui.theme.TextPrimary
 import com.example.landguard.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
+import com.example.landguard.data.network.DeviceRegisterRequest
+import com.example.landguard.data.network.LandGuardApiService
+import com.google.firebase.messaging.FirebaseMessaging
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 
@@ -116,14 +121,64 @@ private enum class LandGuardTab(
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @javax.inject.Inject
+    lateinit var apiService: LandGuardApiService
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        android.util.Log.e(
+            "LandGuardFCM",
+            "MAIN ACTIVITY UPDATED BUILD IS RUNNING"
+        )
 
-        /*
-         * FCM LandGuardFcmService puts alertId into the Intent.
-         *
-         * We preserve that behavior here.
-         */
+        // ---------------------------------------------------------
+        // FCM DEVICE REGISTRATION
+        // ---------------------------------------------------------
+        FirebaseMessaging.getInstance().token
+            .addOnCompleteListener { task ->
+
+                if (!task.isSuccessful) {
+                    android.util.Log.e(
+                        "LandGuardFCM",
+                        "Failed to get FCM token",
+                        task.exception
+                    )
+                    return@addOnCompleteListener
+                }
+
+                val token = task.result
+
+                if (token.isNullOrBlank()) {
+                    android.util.Log.e(
+                        "LandGuardFCM",
+                        "FCM token is empty"
+                    )
+                    return@addOnCompleteListener
+                }
+
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        apiService.registerDevice(
+                            DeviceRegisterRequest(token)
+                        )
+
+                        android.util.Log.d(
+                            "LandGuardFCM",
+                            "Device registered with LandGuard backend"
+                        )
+                    } catch (e: Exception) {
+                        android.util.Log.e(
+                            "LandGuardFCM",
+                            "Device registration failed",
+                            e
+                        )
+                    }
+                }
+            }
+
+        // ---------------------------------------------------------
+        // FCM NOTIFICATION DEEP LINK
+        // ---------------------------------------------------------
         val alertId = intent.getStringExtra("alertId")
 
         setContent {
@@ -135,7 +190,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 // ═════════════════════════════════════════════════════════════════════
 // ROOT UI
 // ═════════════════════════════════════════════════════════════════════
