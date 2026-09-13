@@ -26,6 +26,6 @@ interface LandGuardApiService {
         @Body body: StatusUpdateRequest
     )
 
-    @POST("api/devices/register")
+    @POST("devices")
     suspend fun registerDevice(@Body body: DeviceRegisterRequest)
 }
