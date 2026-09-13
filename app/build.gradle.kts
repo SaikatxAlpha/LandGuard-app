@@ -70,6 +70,10 @@ dependencies {
     ksp(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
 }

@@ -1,10 +1,11 @@
-package com.example.landguard.service
+package com.example.landguard.domain.service
 
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessaging
 import com.example.landguard.data.network.DeviceRegisterRequest
 import com.example.landguard.data.network.LandGuardApiService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
