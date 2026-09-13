@@ -1,10 +1,12 @@
-package com.example.landguard.service
+package com.example.landguard.domain.service
 
+import android.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.landguard.MainActivity
 import com.example.landguard.data.network.DeviceRegisterRequest
@@ -17,13 +19,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlinx.coroutines.tasks.await
 
 @AndroidEntryPoint
 class LandGuardFcmService : FirebaseMessagingService() {
 
     @Inject
     lateinit var apiService: LandGuardApiService
+
+    @Inject
+    lateinit var alertRepository: com.example.landguard.data.repository.AlertRepository
 
     override fun onCreate() {
         super.onCreate()
@@ -58,13 +62,13 @@ class LandGuardFcmService : FirebaseMessagingService() {
                     DeviceRegisterRequest(token)
                 )
 
-                android.util.Log.d(
+                Log.d(
                     "LandGuardFCM",
                     "FCM token registered successfully"
                 )
 
             } catch (e: Exception) {
-                android.util.Log.e(
+                Log.e(
                     "LandGuardFCM",
                     "Failed to register FCM token",
                     e
@@ -84,9 +88,44 @@ class LandGuardFcmService : FirebaseMessagingService() {
         val body =
             message.notification?.body
                 ?: message.data["body"]
-                ?: "New alert received."
+                ?: "New emergency alert."
 
-        val alertId = message.data["alertId"]
+        val alertId =
+            message.data["alertId"]
+                ?: "fcm_${System.currentTimeMillis()}"
+
+        val severity =
+            message.data["severity"]
+                ?: "CRITICAL"
+
+        val location =
+            message.data["affectedLocation"]
+                ?: message.data["location"]
+                ?: "Unknown location"
+
+        val alert = com.example.landguard.domain.model.Alert(
+            id = alertId,
+            title = title,
+            description = body,
+            severity = runCatching {
+                com.example.landguard.domain.model.Severity.valueOf(
+                    severity.uppercase()
+                )
+            }.getOrDefault(
+                com.example.landguard.domain.model.Severity.CRITICAL
+            ),
+            affectedLocation = location,
+            detectedEvent = message.data["detectedEvent"] ?: "Emergency event",
+            timestamp = message.data["timestamp"]
+                ?: System.currentTimeMillis().toString(),
+            sourceProvider = message.data["sourceProvider"]
+                ?: "Authority",
+            isDemoData = false
+        )
+
+        CoroutineScope(Dispatchers.IO).launch {
+            alertRepository.saveAlert(alert)
+        }
 
         showNotification(
             title = title,
@@ -135,7 +174,7 @@ class LandGuardFcmService : FirebaseMessagingService() {
 
         val notification =
             NotificationCompat.Builder(this, channelId)
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setSmallIcon(R.drawable.ic_dialog_alert)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setAutoCancel(true)
