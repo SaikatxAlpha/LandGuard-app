@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlinx.coroutines.tasks.await
 
 @AndroidEntryPoint
 class LandGuardFcmService : FirebaseMessagingService() {
