@@ -124,12 +124,30 @@ class MainActivity : ComponentActivity() {
     @javax.inject.Inject
     lateinit var apiService: LandGuardApiService
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            android.util.Log.w("LandGuardFCM", "Notification permission denied by user")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         android.util.Log.e(
             "LandGuardFCM",
             "MAIN ACTIVITY UPDATED BUILD IS RUNNING"
         )
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
 
         // ---------------------------------------------------------
         // FCM DEVICE REGISTRATION
