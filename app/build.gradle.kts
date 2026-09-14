@@ -74,6 +74,7 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
+    implementation("com.google.android.gms:play-services-nearby:19.3.0")
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
 }
