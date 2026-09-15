@@ -20,7 +20,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val DUMMY_BASE_URL = "http://localhost/"
+    private const val DUMMY_BASE_URL = "http://unconfigured.local/"
     const val PREFS_NAME = "LandGuardNetworkPrefs"
     const val KEY_BASE_URL = "base_url"
 
@@ -41,14 +41,24 @@ object NetworkModule {
             
             if (newBaseUrl != null) {
                 android.util.Log.d("LandGuardBackend", "Using backend URL = $activeBaseUrl")
-                val newUrl = request.url.newBuilder()
+                
+                // Combine the base URL path with the requested endpoint path
+                val combinedSegments = mutableListOf<String>()
+                combinedSegments.addAll(newBaseUrl.pathSegments.filter { it.isNotEmpty() })
+                combinedSegments.addAll(request.url.pathSegments.filter { it.isNotEmpty() })
+
+                val newUrlBuilder = request.url.newBuilder()
                     .scheme(newBaseUrl.scheme)
                     .host(newBaseUrl.host)
                     .port(newBaseUrl.port)
-                    .build()
+                    .encodedPath("/") // Reset path
+
+                for (segment in combinedSegments) {
+                    newUrlBuilder.addPathSegment(segment)
+                }
                 
                 val newRequest = request.newBuilder()
-                    .url(newUrl)
+                    .url(newUrlBuilder.build())
                     .build()
                 chain.proceed(newRequest)
             } else {

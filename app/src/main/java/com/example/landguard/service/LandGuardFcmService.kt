@@ -60,10 +60,16 @@ class LandGuardFcmService : FirebaseMessagingService() {
     private fun registerToken(token: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                apiService.registerDevice(DeviceRegisterRequest(token))
-                Log.d("LandGuardFCM", "FCM token registered successfully")
+                Log.d("LandGuardFCM", "FCM token obtained")
+                Log.d("LandGuardBackend", "Registering device at configured backend")
+                apiService.registerDevice(DeviceRegisterRequest(token, platform = "android"))
+                Log.d("LandGuardBackend", "Device registration HTTP 200")
+                Log.d("LandGuardBackend", "Device registration successful")
+            } catch (e: retrofit2.HttpException) {
+                Log.e("LandGuardBackend", "Device registration HTTP ${e.code()}")
+                Log.e("LandGuardBackend", "Device registration failed: ${e.response()?.errorBody()?.string()}")
             } catch (e: Exception) {
-                Log.e("LandGuardFCM", "Failed to register FCM token", e)
+                Log.e("LandGuardBackend", "Device registration failed: ${e.message}", e)
             }
         }
     }
@@ -71,7 +77,7 @@ class LandGuardFcmService : FirebaseMessagingService() {
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
-        Log.i("LandGuardFCM", "FCM received")
+        Log.i("LandGuardFCM", "MESSAGE RECEIVED")
 
         val data = remoteMessage.data
 
@@ -81,6 +87,10 @@ class LandGuardFcmService : FirebaseMessagingService() {
         val zoneName = data["zoneName"] ?: "Unknown Zone"
         val level = data["level"] ?: "NORMAL"
         val deepLink = data["deepLink"]
+
+        Log.i("LandGuardFCM", "alertId=$alertId")
+        Log.i("LandGuardFCM", "zoneId=$zoneId")
+        Log.i("LandGuardFCM", "level=$level")
 
         val title = remoteMessage.notification?.title 
             ?: data["title"] 
@@ -206,5 +216,6 @@ class LandGuardFcmService : FirebaseMessagingService() {
             .build()
 
         notificationManager.notify(alertId.hashCode(), notification)
+        Log.i("LandGuardFCM", "Notification displayed successfully")
     }
 }

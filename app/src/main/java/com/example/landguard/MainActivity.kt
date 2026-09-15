@@ -248,8 +248,14 @@ class MainActivity : ComponentActivity() {
 
                 lifecycleScope.launch(Dispatchers.IO) {
                     try {
-                        apiService.registerDevice(DeviceRegisterRequest(token))
+                        android.util.Log.d("LandGuardFCM", "FCM token obtained")
+                        android.util.Log.d("LandGuardBackend", "Registering device at configured backend")
+                        apiService.registerDevice(DeviceRegisterRequest(token, platform = "android"))
+                        android.util.Log.d("LandGuardBackend", "Device registration HTTP 200")
                         android.util.Log.d("LandGuardBackend", "Device registration successful")
+                    } catch (e: retrofit2.HttpException) {
+                        android.util.Log.e("LandGuardBackend", "Device registration HTTP ${e.code()}")
+                        android.util.Log.e("LandGuardBackend", "Device registration failed: ${e.response()?.errorBody()?.string()}")
                     } catch (e: Exception) {
                         android.util.Log.e("LandGuardBackend", "Device registration failed: ${e.message}", e)
                     }
