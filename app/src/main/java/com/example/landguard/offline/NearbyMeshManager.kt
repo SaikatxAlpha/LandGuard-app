@@ -1,7 +1,15 @@
 package com.example.landguard.offline
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import com.example.landguard.MainActivity
+import com.example.landguard.R
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.AdvertisingOptions
 import com.google.android.gms.nearby.connection.ConnectionInfo
@@ -96,7 +104,12 @@ class NearbyMeshManager(private val context: Context) {
                 payload.asBytes()?.let { bytes ->
                     val message = String(bytes, StandardCharsets.UTF_8)
                     Log.i(TAG, "Message received")
-                    if (message == "HELLO LANDGUARD") {
+                    
+                    val offlineAlert = OfflineAlert.fromJson(message)
+                    if (offlineAlert != null) {
+                        Log.i(TAG, "LandGuardMesh: Offline alert received without Internet")
+                        showOfflineNotification(offlineAlert)
+                    } else if (message == "HELLO LANDGUARD") {
                         Log.i(TAG, "Received HELLO LANDGUARD")
                     }
                 }
@@ -106,6 +119,46 @@ class NearbyMeshManager(private val context: Context) {
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
             // Optional: Handle transfer progress
         }
+    }
+
+    private fun showOfflineNotification(alert: OfflineAlert) {
+        val channelId = "landguard_offline_alerts"
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "LandGuard Offline Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("alertId", alert.alertId)
+            putExtra("zoneId", alert.zoneId)
+            putExtra("zoneName", alert.zoneName)
+            putExtra("level", alert.level)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            alert.alertId.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("\uD83D\uDD34 ${alert.level} — ${alert.zoneName}")
+            .setContentText(alert.message)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        notificationManager.notify(alert.alertId.hashCode(), notification)
     }
 
     fun startAdvertising() {
@@ -188,6 +241,28 @@ class NearbyMeshManager(private val context: Context) {
             }
         } else {
             Log.w(TAG, "Cannot send message, no endpoints connected")
+        }
+    }
+
+    fun sendOfflineAlert(alert: OfflineAlert) {
+        val json = alert.toJson()
+        val payload = Payload.fromBytes(json.toByteArray(StandardCharsets.UTF_8))
+        
+        val currentEndpoints = _connectedEndpoints.value
+        if (currentEndpoints.isNotEmpty()) {
+            try {
+                connectionsClient.sendPayload(currentEndpoints.toList(), payload)
+                    .addOnSuccessListener {
+                        Log.i(TAG, "Offline alert sent to ${currentEndpoints.size} endpoints")
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e(TAG, "Failed to send offline alert", e)
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception sending offline alert", e)
+            }
+        } else {
+            Log.w(TAG, "Cannot send offline alert, no endpoints connected")
         }
     }
 

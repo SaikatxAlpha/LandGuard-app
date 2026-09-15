@@ -124,6 +124,11 @@ class MainActivity : ComponentActivity() {
     @javax.inject.Inject
     lateinit var apiService: LandGuardApiService
 
+    @javax.inject.Inject
+    lateinit var alertRepository: com.example.landguard.data.repository.AlertRepository
+
+    private lateinit var meshManager: com.example.landguard.offline.NearbyMeshManager
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -146,6 +151,43 @@ class MainActivity : ComponentActivity() {
                 ) != android.content.pm.PackageManager.PERMISSION_GRANTED
             ) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        // ---------------------------------------------------------
+        // NEARBY CONNECTIONS OFFLINE MESH (PHASE B)
+        // ---------------------------------------------------------
+        meshManager = com.example.landguard.offline.NearbyMeshManager(this)
+        meshManager.startAdvertising()
+        meshManager.startDiscovery()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            var isFirstEmission = true
+            var lastBroadcastedAlertId: String? = null
+            alertRepository.observeHistory().collect { alerts ->
+                if (isFirstEmission) {
+                    isFirstEmission = false
+                    lastBroadcastedAlertId = alerts.firstOrNull()?.id
+                    return@collect // skip initial history
+                }
+                
+                alerts.firstOrNull()?.let { newestAlert ->
+                    if (newestAlert.id != lastBroadcastedAlertId) {
+                        lastBroadcastedAlertId = newestAlert.id
+                        val offlineAlert = com.example.landguard.offline.OfflineAlert(
+                            alertId = newestAlert.id,
+                            zoneId = newestAlert.parcelId,
+                            zoneName = newestAlert.affectedLocation,
+                            level = newestAlert.severity.name,
+                            message = newestAlert.description,
+                            timestamp = newestAlert.timestamp,
+                            expiresAt = System.currentTimeMillis() + 86400000,
+                            originDeviceId = android.os.Build.MODEL,
+                            hopCount = 0
+                        )
+                        meshManager.sendOfflineAlert(offlineAlert)
+                    }
+                }
             }
         }
 
@@ -205,6 +247,12 @@ class MainActivity : ComponentActivity() {
                     notificationAlertId = alertId
                 )
             }
+        }
+    }
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::meshManager.isInitialized) {
+            meshManager.stopAll()
         }
     }
 }
