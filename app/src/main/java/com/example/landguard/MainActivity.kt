@@ -194,61 +194,69 @@ class MainActivity : ComponentActivity() {
         // ---------------------------------------------------------
         // FCM DEVICE REGISTRATION
         // ---------------------------------------------------------
-        FirebaseMessaging.getInstance().token
-            .addOnCompleteListener { task ->
-
-                if (!task.isSuccessful) {
-                    android.util.Log.e(
-                        "LandGuardFCM",
-                        "Failed to get FCM token",
-                        task.exception
-                    )
-                    return@addOnCompleteListener
-                }
-
-                val token = task.result
-
-                if (token.isNullOrBlank()) {
-                    android.util.Log.e(
-                        "LandGuardFCM",
-                        "FCM token is empty"
-                    )
-                    return@addOnCompleteListener
-                }
-
-                lifecycleScope.launch(Dispatchers.IO) {
-                    try {
-                        apiService.registerDevice(
-                            DeviceRegisterRequest(token)
-                        )
-
-                        android.util.Log.d(
-                            "LandGuardFCM",
-                            "Device registered with LandGuard backend"
-                        )
-                    } catch (e: Exception) {
-                        android.util.Log.e(
-                            "LandGuardFCM",
-                            "Device registration failed",
-                            e
-                        )
-                    }
-                }
-            }
+        // Registration is now handled after the backend URL is confirmed.
 
         // ---------------------------------------------------------
         // FCM NOTIFICATION DEEP LINK
         // ---------------------------------------------------------
         val alertId = intent.getStringExtra("alertId")
 
+        val sharedPrefs = getSharedPreferences("LandGuardNetworkPrefs", android.content.Context.MODE_PRIVATE)
+
         setContent {
             LandGuardTheme {
-                LandGuardAppUI(
-                    notificationAlertId = alertId
-                )
+                var isBackendConfigured by remember {
+                    mutableStateOf(sharedPrefs.getString("base_url", "")?.isNotBlank() == true)
+                }
+
+                if (!isBackendConfigured) {
+                    BackendSetupScreen(
+                        onUrlSaved = { url ->
+                            sharedPrefs.edit().putString("base_url", url).apply()
+                            isBackendConfigured = true
+                            registerFcmDeviceToken()
+                        }
+                    )
+                } else {
+                    LaunchedEffect(Unit) {
+                        registerFcmDeviceToken()
+                    }
+                    LandGuardAppUI(
+                        notificationAlertId = alertId,
+                        onChangeBackendRequest = {
+                            isBackendConfigured = false
+                        }
+                    )
+                }
             }
         }
     }
+
+    private fun registerFcmDeviceToken() {
+        FirebaseMessaging.getInstance().token
+            .addOnCompleteListener { task ->
+                if (!task.isSuccessful) {
+                    android.util.Log.e("LandGuardFCM", "Failed to get FCM token", task.exception)
+                    return@addOnCompleteListener
+                }
+
+                val token = task.result
+                if (token.isNullOrBlank()) {
+                    android.util.Log.e("LandGuardFCM", "FCM token is empty")
+                    return@addOnCompleteListener
+                }
+
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        apiService.registerDevice(DeviceRegisterRequest(token))
+                        android.util.Log.d("LandGuardBackend", "Device registration successful")
+                    } catch (e: Exception) {
+                        android.util.Log.e("LandGuardBackend", "Device registration failed: ${e.message}", e)
+                    }
+                }
+            }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         if (::meshManager.isInitialized) {
@@ -257,12 +265,85 @@ class MainActivity : ComponentActivity() {
     }
 }
 // ═════════════════════════════════════════════════════════════════════
+// BACKEND CONFIGURATION
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun BackendSetupScreen(
+    onUrlSaved: (String) -> Unit
+) {
+    var url by remember { mutableStateOf("") }
+    var showError by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BgDeep)
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "LandGuard Backend Configuration",
+            color = TextPrimary,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        Text(
+            text = "Please enter the base URL of your LandGuard backend server.",
+            color = TextSecondary,
+            fontSize = 14.sp
+        )
+
+        Spacer(Modifier.height(24.dp))
+
+        androidx.compose.material3.OutlinedTextField(
+            value = url,
+            onValueChange = { 
+                url = it
+                showError = false 
+            },
+            label = { Text("Backend URL") },
+            placeholder = { Text("https://your-backend-url.com/") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            isError = showError,
+            supportingText = if (showError) {
+                { Text("Please enter a valid URL starting with http:// or https://") }
+            } else null
+        )
+
+        Spacer(Modifier.height(32.dp))
+
+        androidx.compose.material3.Button(
+            onClick = {
+                var finalUrl = url.trim()
+                if (finalUrl.isNotBlank() && (finalUrl.startsWith("http://") || finalUrl.startsWith("https://"))) {
+                    if (!finalUrl.endsWith("/")) {
+                        finalUrl += "/"
+                    }
+                    onUrlSaved(finalUrl)
+                } else {
+                    showError = true
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Connect / Save")
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
 // ROOT UI
 // ═════════════════════════════════════════════════════════════════════
 
 @Composable
 private fun LandGuardAppUI(
-    notificationAlertId: String?
+    notificationAlertId: String?,
+    onChangeBackendRequest: () -> Unit
 ) {
     var selectedTab by remember {
         mutableStateOf(
@@ -429,20 +510,11 @@ private fun LandGuardAppUI(
                 // ─────────────────────────────────────────────
 
                 LandGuardTab.MORE -> {
-                    com.example.landguard.ui.more.MoreScreen(
-                        onOpenProfile = {
-                            // Profile screen will be connected here
-                        },
-                        onOpenSatellite = {
-                            showSatelliteScreen = true
-                        },
-                        onOpenReports = {
-                            showSatelliteScreen = true
-                            // Reports screen will be connected next
-                        },
-                        onOpenSettings = {
-                            // Existing ProfileScreen/settings will be connected here
-                        }
+                    MoreTabScreen(
+                        notificationsEnabled = notificationsEnabled,
+                        onNotificationsChanged = { notificationsEnabled = it },
+                        onLocationRequest = { showLocationSheet = true },
+                        onChangeBackendRequest = onChangeBackendRequest
                     )
                 }
             }
@@ -1193,7 +1265,8 @@ private fun ParcelsTabScreen(
 private fun MoreTabScreen(
     notificationsEnabled: Boolean,
     onNotificationsChanged: (Boolean) -> Unit,
-    onLocationRequest: () -> Unit
+    onLocationRequest: () -> Unit,
+    onChangeBackendRequest: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -1337,6 +1410,13 @@ private fun MoreTabScreen(
             title = "Profile",
             subtitle = "Account information",
             onClick = {}
+        )
+
+        MoreRow(
+            icon = Icons.Default.Warning,
+            title = "Change Backend URL",
+            subtitle = "Configure server connection",
+            onClick = onChangeBackendRequest
         )
     }
 }

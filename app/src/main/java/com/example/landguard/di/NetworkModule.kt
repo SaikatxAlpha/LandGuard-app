@@ -20,7 +20,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val DEFAULT_BASE_URL = "http://10.215.252.49:8000/"
+    private const val DUMMY_BASE_URL = "http://localhost/"
     const val PREFS_NAME = "LandGuardNetworkPrefs"
     const val KEY_BASE_URL = "base_url"
 
@@ -35,10 +35,12 @@ object NetworkModule {
     fun provideDynamicUrlInterceptor(sharedPreferences: SharedPreferences): Interceptor {
         return Interceptor { chain ->
             val request = chain.request()
-            val baseUrlString = sharedPreferences.getString(KEY_BASE_URL, DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL
-            val newBaseUrl = baseUrlString.toHttpUrlOrNull()
+            val baseUrlString = sharedPreferences.getString(KEY_BASE_URL, null)
+            val activeBaseUrl = if (!baseUrlString.isNullOrBlank()) baseUrlString else DUMMY_BASE_URL
+            val newBaseUrl = activeBaseUrl.toHttpUrlOrNull()
             
             if (newBaseUrl != null) {
+                android.util.Log.d("LandGuardBackend", "Using backend URL = $activeBaseUrl")
                 val newUrl = request.url.newBuilder()
                     .scheme(newBaseUrl.scheme)
                     .host(newBaseUrl.host)
@@ -71,7 +73,7 @@ object NetworkModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(DEFAULT_BASE_URL)
+            .baseUrl(DUMMY_BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
