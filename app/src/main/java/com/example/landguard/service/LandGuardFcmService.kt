@@ -34,6 +34,9 @@ class LandGuardFcmService : FirebaseMessagingService() {
     @Inject
     lateinit var alertRepository: AlertRepository
 
+    @Inject
+    lateinit var meshManager: com.example.landguard.offline.NearbyMeshManager
+
     override fun onCreate() {
         super.onCreate()
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
@@ -68,6 +71,8 @@ class LandGuardFcmService : FirebaseMessagingService() {
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
+        Log.i("LandGuardFCM", "FCM received")
+
         val data = remoteMessage.data
 
         // 5. Read these FCM data fields: alertId, zoneId, zoneName, level, deepLink
@@ -100,6 +105,30 @@ class LandGuardFcmService : FirebaseMessagingService() {
 
         CoroutineScope(Dispatchers.IO).launch {
             alertRepository.saveAlert(alert)
+        }
+
+        try {
+            Log.i("LandGuardFCM", "Offline relay attempted")
+            val currentEndpoints = meshManager.connectedEndpoints.value
+            if (currentEndpoints.isNotEmpty()) {
+                val offlineAlert = com.example.landguard.offline.OfflineAlert(
+                    alertId = alertId,
+                    zoneId = zoneId,
+                    zoneName = zoneName,
+                    level = level,
+                    message = body,
+                    timestamp = System.currentTimeMillis().toString(),
+                    expiresAt = System.currentTimeMillis() + 86400000,
+                    originDeviceId = Build.MODEL,
+                    hopCount = 0
+                )
+                meshManager.sendOfflineAlert(offlineAlert)
+                Log.i("LandGuardMesh", "Offline alert forwarded")
+            } else {
+                Log.i("LandGuardFCM", "Offline relay skipped \u2014 no nearby peers")
+            }
+        } catch (e: Exception) {
+            Log.e("LandGuardFCM", "Error during offline relay", e)
         }
 
         showNotification(

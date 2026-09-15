@@ -127,7 +127,8 @@ class MainActivity : ComponentActivity() {
     @javax.inject.Inject
     lateinit var alertRepository: com.example.landguard.data.repository.AlertRepository
 
-    private lateinit var meshManager: com.example.landguard.offline.NearbyMeshManager
+    @javax.inject.Inject
+    lateinit var meshManager: com.example.landguard.offline.NearbyMeshManager
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -157,7 +158,6 @@ class MainActivity : ComponentActivity() {
         // ---------------------------------------------------------
         // NEARBY CONNECTIONS OFFLINE MESH (PHASE B)
         // ---------------------------------------------------------
-        meshManager = com.example.landguard.offline.NearbyMeshManager(this)
         meshManager.startAdvertising()
         meshManager.startDiscovery()
 

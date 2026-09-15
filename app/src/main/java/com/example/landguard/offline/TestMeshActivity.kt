@@ -1,6 +1,8 @@
 package com.example.landguard.offline
 
 import android.Manifest
+import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -14,10 +16,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class TestMeshActivity : ComponentActivity() {
 
-    private lateinit var meshManager: NearbyMeshManager
+    @Inject
+    lateinit var meshManager: NearbyMeshManager
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -33,15 +39,13 @@ class TestMeshActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        meshManager = NearbyMeshManager(this)
-
         setContent {
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    TestMeshScreen(meshManager)
+                    TestMeshScreen(meshManager, this@TestMeshActivity)
                 }
             }
         }
@@ -81,19 +85,44 @@ class TestMeshActivity : ComponentActivity() {
 }
 
 @Composable
-fun TestMeshScreen(meshManager: NearbyMeshManager) {
+fun TestMeshScreen(meshManager: NearbyMeshManager, context: Context) {
     val isAdvertising by meshManager.isAdvertising.collectAsState()
     val isDiscovering by meshManager.isDiscovering.collectAsState()
     val connectedEndpoints by meshManager.connectedEndpoints.collectAsState()
+
+    val prefs: SharedPreferences = context.getSharedPreferences("LandGuardNetworkPrefs", Context.MODE_PRIVATE)
+    var baseUrl by remember { mutableStateOf(prefs.getString("base_url", "http://10.215.252.49:8000/") ?: "http://10.215.252.49:8000/") }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Text("LandGuard Offline Mesh Test", style = MaterialTheme.typography.titleLarge)
+        Text("LandGuard Developer Test", style = MaterialTheme.typography.titleLarge)
         
         Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = baseUrl,
+            onValueChange = { baseUrl = it },
+            label = { Text("API Base URL") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(
+            onClick = {
+                prefs.edit().putString("base_url", baseUrl).apply()
+                Toast.makeText(context, "Base URL updated. Restart app to re-register.", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Save API URL")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Offline Mesh", style = MaterialTheme.typography.titleMedium)
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = {

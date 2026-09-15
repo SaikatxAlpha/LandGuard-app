@@ -27,8 +27,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.nio.charset.StandardCharsets
+import javax.inject.Inject
+import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
-class NearbyMeshManager(private val context: Context) {
+@Singleton
+class NearbyMeshManager @Inject constructor(@ApplicationContext private val context: Context) {
 
     private val connectionsClient: ConnectionsClient = Nearby.getConnectionsClient(context)
     private val SERVICE_ID = context.packageName
@@ -107,7 +111,7 @@ class NearbyMeshManager(private val context: Context) {
                     
                     val offlineAlert = OfflineAlert.fromJson(message)
                     if (offlineAlert != null) {
-                        Log.i(TAG, "LandGuardMesh: Offline alert received without Internet")
+                        Log.i(TAG, "Offline alert received without Internet")
                         showOfflineNotification(offlineAlert)
                     } else if (message == "HELLO LANDGUARD") {
                         Log.i(TAG, "Received HELLO LANDGUARD")
