@@ -343,7 +343,7 @@ private fun ParcelMapPreview(
             .fillMaxWidth()
             .height(210.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFFDDE7DF))
+            .background(com.example.landguard.ui.theme.BgElevated)
             .clickable(onClick = onClick)
     ) {
 
@@ -356,7 +356,7 @@ private fun ParcelMapPreview(
                 .fillMaxWidth()
                 .height(1.dp)
                 .align(Alignment.Center)
-                .background(Color(0xFFBFCFC3))
+                .background(com.example.landguard.ui.theme.BgBorder)
         )
 
         Box(
@@ -364,7 +364,7 @@ private fun ParcelMapPreview(
                 .fillMaxHeight()
                 .width(1.dp)
                 .align(Alignment.Center)
-                .background(Color(0xFFBFCFC3))
+                .background(com.example.landguard.ui.theme.BgBorder)
         )
 
         // Parcel boundary
@@ -402,7 +402,7 @@ private fun ParcelMapPreview(
                 .align(Alignment.TopStart)
                 .padding(12.dp),
 
-            color = Color.White.copy(alpha = 0.94f),
+            color = com.example.landguard.ui.theme.GlassBg,
             shape = RoundedCornerShape(10.dp)
         ) {
 
@@ -438,7 +438,7 @@ private fun ParcelMapPreview(
                 .align(Alignment.BottomCenter)
                 .padding(12.dp),
 
-            color = Color.White.copy(alpha = 0.96f),
+            color = com.example.landguard.ui.theme.GlassBg,
             shape = RoundedCornerShape(11.dp)
         ) {
 

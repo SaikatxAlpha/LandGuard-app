@@ -3,44 +3,45 @@ package com.example.landguard.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /*
- * LandGuard Design System
+ * LandGuard Design System — light
  *
- * Light environmental / GIS visual language.
+ * Clean white surfaces with a very light green-gray canvas.
+ * Forest green carries the brand; an ochre earth accent and a
+ * red → orange → amber → green risk ramp carry the "Guard" half.
  *
- * Primary:
- * Forest green
- *
- * Surfaces:
- * White + very light green-gray
- *
- * Risk:
- * Green / Amber / Orange / Red
+ * Token names are shared by every screen, so changing values
+ * here re-themes the whole app.
  */
 
 // ─────────────────────────────────────────────────────────────
 // Backgrounds
 // ─────────────────────────────────────────────────────────────
 
-val BgDeep = Color(0xFFF1F5F2)
+val BgDeep = Color(0xFFF6F8F7)
 val BgSurface = Color(0xFFFFFFFF)
-val BgElevated = Color(0xFFF7FAF8)
+val BgElevated = Color(0xFFF2F5F3)
 val BgHigh = Color(0xFFFFFFFF)
 
-val BgBorder = Color(0xFFDDE8E1)
-val BgDivider = Color(0xFFE8EFEB)
+val BgBorder = Color(0xFFE1E8E3)
+val BgDivider = Color(0xFFEBF0ED)
 
 // ─────────────────────────────────────────────────────────────
-// LandGuard Brand
+// LandGuard Brand — forest green
 // ─────────────────────────────────────────────────────────────
 
 val BrandPrimary = Color(0xFF1B5E37)
 val BrandPrimaryDark = Color(0xFF12452A)
-val BrandPrimaryLight = Color(0xFF3C805A)
+val BrandPrimaryLight = Color(0xFF2E7A4E)
 
 val BrandSecondary = Color(0xFF2D7A52)
 
 val BrandContainer = Color(0xFFE8F5EE)
 val BrandContainerStrong = Color(0xFFD8EDE1)
+
+// Earth accents
+val EarthOchre = Color(0xFFC98A1E)
+val EarthClay = Color(0xFFB0603F)
+val EarthSand = Color(0xFFF4EEE1)
 
 // Compatibility aliases for existing code
 val CyanPrimary = BrandPrimary
@@ -100,7 +101,7 @@ val TextWhite = Color(0xFFFFFFFF)
 
 val TextPrimary = Color(0xFF0D1812)
 
-val TextSecondary = Color(0xFF406052)
+val TextSecondary = Color(0xFF4A6558)
 
 val TextMuted = Color(0xFF8AA898)
 
@@ -111,4 +112,5 @@ val TextMuted = Color(0xFF8AA898)
 val OverlayDark = Color(0x88000000)
 val OverlayLight = Color(0x33FFFFFF)
 
-val GlassBg = Color(0xF5FFFFFF)
+val GlassBg = Color(0xF7FFFFFF)
+val GlassBorder = Color(0x140D1812)

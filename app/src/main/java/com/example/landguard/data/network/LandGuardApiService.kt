@@ -27,5 +27,5 @@ interface LandGuardApiService {
     )
 
     @POST("devices")
-    suspend fun registerDevice(@Body body: DeviceRegisterRequest)
+    suspend fun registerDevice(@Body body: DeviceRegisterRequest): retrofit2.Response<okhttp3.ResponseBody>
 }

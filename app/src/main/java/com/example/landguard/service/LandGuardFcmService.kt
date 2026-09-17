@@ -60,16 +60,30 @@ class LandGuardFcmService : FirebaseMessagingService() {
     private fun registerToken(token: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val sharedPrefs = getSharedPreferences("LandGuardNetworkPrefs", Context.MODE_PRIVATE)
+                val baseUrl = sharedPrefs.getString("base_url", "UNKNOWN")
+                
                 Log.d("LandGuardFCM", "FCM token obtained")
-                Log.d("LandGuardBackend", "Registering device at configured backend")
-                apiService.registerDevice(DeviceRegisterRequest(token, platform = "android"))
-                Log.d("LandGuardBackend", "Device registration HTTP 200")
-                Log.d("LandGuardBackend", "Device registration successful")
-            } catch (e: retrofit2.HttpException) {
-                Log.e("LandGuardBackend", "Device registration HTTP ${e.code()}")
-                Log.e("LandGuardBackend", "Device registration failed: ${e.response()?.errorBody()?.string()}")
+                Log.d("LandGuardBackend", "POST /devices")
+                Log.d("LandGuardBackend", "Configured URL: $baseUrl")
+                
+                val response = apiService.registerDevice(DeviceRegisterRequest(token, platform = "android"))
+                
+                Log.d("LandGuardBackend", "HTTP status = ${response.code()}")
+                val bodyString = if (response.isSuccessful) {
+                    response.body()?.string() ?: "empty"
+                } else {
+                    response.errorBody()?.string() ?: "empty error"
+                }
+                Log.d("LandGuardBackend", "response = $bodyString")
+                
+                if (response.isSuccessful) {
+                    Log.d("LandGuardBackend", "FCM device registration SUCCESS")
+                } else {
+                    Log.d("LandGuardBackend", "FCM device registration FAILED")
+                }
             } catch (e: Exception) {
-                Log.e("LandGuardBackend", "Device registration failed: ${e.message}", e)
+                Log.e("LandGuardBackend", "FCM device registration FAILED: ${e.message}", e)
             }
         }
     }
@@ -216,6 +230,7 @@ class LandGuardFcmService : FirebaseMessagingService() {
             .build()
 
         notificationManager.notify(alertId.hashCode(), notification)
+        Log.i("LandGuardFCM", "notification created")
         Log.i("LandGuardFCM", "Notification displayed successfully")
     }
 }

@@ -38,21 +38,23 @@ private val LandGuardLightColors = lightColorScheme(
     onTertiaryContainer = Color(0xFF34286F),
 
     // ─────────────────────────────────────────────
-    // Background
+    // Background / Surface
     // ─────────────────────────────────────────────
 
     background = BgDeep,
     onBackground = TextPrimary,
-
-    // ─────────────────────────────────────────────
-    // Surface
-    // ─────────────────────────────────────────────
 
     surface = BgSurface,
     onSurface = TextPrimary,
 
     surfaceVariant = BgElevated,
     onSurfaceVariant = TextSecondary,
+
+    surfaceContainerLowest = BgSurface,
+    surfaceContainerLow = BgSurface,
+    surfaceContainer = BgSurface,
+    surfaceContainerHigh = BgSurface,
+    surfaceContainerHighest = BgElevated,
 
     // ─────────────────────────────────────────────
     // Borders
@@ -81,7 +83,7 @@ private val LandGuardLightColors = lightColorScheme(
 
     surfaceTint = BrandPrimary,
 
-    scrim = Color(0x88000000)
+    scrim = Color(0x66000000)
 )
 
 @Composable

@@ -21,11 +21,15 @@ class FcmTokenManager @Inject constructor(
                 FirebaseMessaging.getInstance().token.await()
             }
 
-            apiService.registerDevice(
+            val response = apiService.registerDevice(
                 DeviceRegisterRequest(token)
             )
-
-            Log.d("LandGuardFCM", "FCM token registered")
+            
+            if (response.isSuccessful) {
+                Log.d("LandGuardFCM", "FCM token registered")
+            } else {
+                Log.e("LandGuardFCM", "Token registration failed")
+            }
         } catch (e: Exception) {
             Log.e("LandGuardFCM", "Token registration failed", e)
         }

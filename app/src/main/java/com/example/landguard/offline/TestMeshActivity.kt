@@ -91,7 +91,7 @@ fun TestMeshScreen(meshManager: NearbyMeshManager, context: Context) {
     val connectedEndpoints by meshManager.connectedEndpoints.collectAsState()
 
     val prefs: SharedPreferences = context.getSharedPreferences("LandGuardNetworkPrefs", Context.MODE_PRIVATE)
-    var baseUrl by remember { mutableStateOf(prefs.getString("base_url", "http://10.215.252.49:8000/") ?: "http://10.215.252.49:8000/") }
+    var baseUrl by remember { mutableStateOf(prefs.getString("base_url", "") ?: "") }
 
     Column(
         modifier = Modifier
