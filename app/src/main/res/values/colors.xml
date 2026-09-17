@@ -1,4 +1,11 @@
 <resources>
     <color name="landguard_primary">#176B5C</color>
     <color name="landguard_background">#F7F9FC</color>
+
+    <!-- LandGuard brand identity (splash / onboarding / launcher) -->
+    <color name="landguard_forest_night">#0B1F14</color>
+    <color name="landguard_forest">#2E7D32</color>
+    <color name="landguard_leaf">#6DBF67</color>
+    <color name="landguard_ember">#FF8A3D</color>
+    <color name="landguard_mist">#F4F6F1</color>
 </resources>

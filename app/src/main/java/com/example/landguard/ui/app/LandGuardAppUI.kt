@@ -170,37 +170,46 @@ fun BackendSetupScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BgDeep)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
+            .background(com.example.landguard.ui.brand.BrandColors.ForestNight)
     ) {
+        com.example.landguard.ui.brand.TopoContours(
+            modifier = Modifier.fillMaxSize(),
+            centerX = 0.85f,
+            centerY = 0.1f,
+            rings = 8,
+            color = com.example.landguard.ui.brand.BrandColors.Leaf.copy(alpha = 0.09f)
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             verticalArrangement = Arrangement.Center
         ) {
-            LandGuardWordmark()
+            com.example.landguard.ui.brand.LandGuardLogo(size = 64.dp)
+            Spacer(Modifier.height(12.dp))
+            com.example.landguard.ui.brand.LandGuardBrandWordmark(fontSize = 30.sp)
 
             Spacer(Modifier.height(28.dp))
 
             Text(
-                text = "Connect to your LandGuard server",
-                color = TextPrimary,
-                fontSize = 26.sp,
+                text = "Connect to your\nLandGuard server",
+                color = com.example.landguard.ui.brand.BrandColors.Mist,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.ExtraBold,
-                lineHeight = 32.sp
+                lineHeight = 33.sp
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
 
             Text(
                 text = "Enter the base URL of the LandGuard backend you use. You can change it later from More → Server connection.",
-                color = TextSecondary,
-                fontSize = 14.sp,
-                lineHeight = 20.sp
+                color = com.example.landguard.ui.brand.BrandColors.MistMuted,
+                fontSize = 15.sp,
+                lineHeight = 21.sp
             )
 
             Spacer(Modifier.height(28.dp))
@@ -216,18 +225,25 @@ fun BackendSetupScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = showError,
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = BrandPrimaryLight,
-                    unfocusedBorderColor = BgBorder,
-                    focusedContainerColor = BgSurface,
-                    unfocusedContainerColor = BgSurface,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    cursorColor = BrandPrimaryLight,
-                    focusedLabelColor = BrandPrimaryLight,
-                    unfocusedLabelColor = TextMuted
+                    focusedBorderColor = com.example.landguard.ui.brand.BrandColors.Leaf,
+                    unfocusedBorderColor = com.example.landguard.ui.brand.BrandColors.CardBorder,
+                    focusedContainerColor = com.example.landguard.ui.brand.BrandColors.Card,
+                    unfocusedContainerColor = com.example.landguard.ui.brand.BrandColors.Card,
+                    focusedTextColor = com.example.landguard.ui.brand.BrandColors.Mist,
+                    unfocusedTextColor = com.example.landguard.ui.brand.BrandColors.Mist,
+                    cursorColor = com.example.landguard.ui.brand.BrandColors.Leaf,
+                    focusedLabelColor = com.example.landguard.ui.brand.BrandColors.Leaf,
+                    unfocusedLabelColor = com.example.landguard.ui.brand.BrandColors.MistMuted,
+                    focusedPlaceholderColor = com.example.landguard.ui.brand.BrandColors.MistMuted.copy(alpha = 0.6f),
+                    unfocusedPlaceholderColor = com.example.landguard.ui.brand.BrandColors.MistMuted.copy(alpha = 0.6f),
+                    errorContainerColor = com.example.landguard.ui.brand.BrandColors.Card,
+                    errorTextColor = com.example.landguard.ui.brand.BrandColors.Mist,
+                    errorBorderColor = com.example.landguard.ui.brand.BrandColors.Hazard,
+                    errorLabelColor = com.example.landguard.ui.brand.BrandColors.Hazard,
+                    errorSupportingTextColor = com.example.landguard.ui.brand.BrandColors.Hazard
                 ),
                 supportingText = if (showError) {
                     { Text("Please enter a valid URL starting with http:// or https://") }
@@ -236,9 +252,8 @@ fun BackendSetupScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            PanelButton(
+            com.example.landguard.ui.startup.BrandButton(
                 text = "Connect",
-                primary = true,
                 onClick = {
                     var finalUrl = url.trim()
                     if (finalUrl.isNotBlank() && (finalUrl.startsWith("http://") || finalUrl.startsWith("https://"))) {

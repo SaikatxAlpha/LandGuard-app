@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed (monochrome) launcher icon: single-colour shield, mountains, river and satellite. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.58"
+        android:scaleY="0.58"
+        android:translateX="25"
+        android:translateY="25">
+        <!-- Shield outline -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="6"
+            android:strokeLineJoin="round"
+            android:pathData="M48,10 L66,17 M81,31 L81,50 C81,72 66,85 48,92.5 C30,85 15,72 15,50 L15,22 L48,10" />
+        <!-- Mountains -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M22,66 L36,52 L42,57 L54,38 L64,50 L74,44 L74,62 C72,72 62,80 48,86 C35,80 25,74 22,66 Z" />
+        <!-- Satellite -->
+        <group
+            android:pivotX="80"
+            android:pivotY="15"
+            android:rotation="45">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M76.5,11.5h7v7h-7z M69,13h6v4h-6z M85,13h6v4h-6z" />
+        </group>
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="2.6"
+            android:strokeLineCap="round"
+            android:pathData="M66.5,21.5 A7,7 0,0 0,73.5 28.5" />
+    </group>
+</vector>

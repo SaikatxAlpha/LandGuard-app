@@ -283,27 +283,21 @@ fun SeverityPill(severity: Severity, modifier: Modifier = Modifier) {
 @Composable
 fun LandGuardWordmark(modifier: Modifier = Modifier, compact: Boolean = false) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        // Brand mark on its forest-night tile, matching the launcher icon.
         Box(
             modifier = Modifier
-                .size(if (compact) 28.dp else 34.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Brush.linearGradient(listOf(BrandPrimaryLight, BrandPrimary, EarthOchre))),
+                .size(if (compact) 32.dp else 38.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(com.example.landguard.ui.brand.BrandColors.ForestNight),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Filled.Shield,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(if (compact) 16.dp else 19.dp)
-            )
+            com.example.landguard.ui.brand.LandGuardLogo(size = if (compact) 26.dp else 31.dp)
         }
         Spacer(Modifier.width(9.dp))
-        Text(
-            text = "LandGuard",
-            color = TextPrimary,
-            fontSize = if (compact) 16.sp else 19.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = (-0.3).sp
+        com.example.landguard.ui.brand.LandGuardBrandWordmark(
+            fontSize = if (compact) 17.sp else 20.sp,
+            landColor = TextPrimary,
+            guardColor = BrandPrimaryLight
         )
     }
 }

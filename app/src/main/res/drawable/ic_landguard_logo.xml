@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    LandGuard brand mark: Shield (protection) + Mountains (terrain)
+    + River path (communities) + Satellite (real-time intelligence).
+    100 x 100 design grid, shared by the launcher icon and in-app logo.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Shield rim -->
+    <path android:pathData="M48,7 L80,19 L84,23 L84,50 C84,74 68,88 48,96 C28,88 12,74 12,50 L12,19 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="20" android:startY="10"
+                android:endX="70" android:endY="96">
+                <item android:offset="0" android:color="#FFD7EBC9" />
+                <item android:offset="0.45" android:color="#FF8FD18A" />
+                <item android:offset="1" android:color="#FF3E9F4E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <group>
+        <clip-path android:pathData="M48,14 L77,25 L77,50 C77,70 64,81.5 48,88.5 C32,81.5 19,70 19,50 L19,25 Z" />
+
+        <!-- Sky -->
+        <path android:pathData="M0,0h100v100h-100z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="48" android:startY="14"
+                    android:endX="48" android:endY="70">
+                    <item android:offset="0" android:color="#FF0B1F14" />
+                    <item android:offset="0.55" android:color="#FF1F4A2C" />
+                    <item android:offset="1" android:color="#FF7FAF5A" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Sun glow -->
+        <path android:pathData="M48,44m-22,0a22,22 0,1 1,44 0a22,22 0,1 1,-44 0">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="radial"
+                    android:centerX="48" android:centerY="44"
+                    android:gradientRadius="22">
+                    <item android:offset="0" android:color="#66FF8A3D" />
+                    <item android:offset="1" android:color="#00FF8A3D" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Sun -->
+        <path android:pathData="M48,43m-12.5,0a12.5,12.5 0,1 1,25 0a12.5,12.5 0,1 1,-25 0">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="48" android:startY="30"
+                    android:endX="48" android:endY="56">
+                    <item android:offset="0" android:color="#FFFFB25C" />
+                    <item android:offset="1" android:color="#FFE8541E" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Back range -->
+        <path
+            android:fillColor="#FF1E5A32"
+            android:pathData="M10,64 L27,47 L35,53 L52,30 L64,45 L71,39 L90,58 L90,100 L10,100 Z" />
+
+        <!-- Sunlit faces -->
+        <path
+            android:fillColor="#FF9ED39A"
+            android:pathData="M52,30 L45,41 L49,39.5 L50,46 L55,38 L58,42 L64,45 Z" />
+        <path
+            android:fillColor="#FF6DBF67"
+            android:pathData="M27,47 L22,54 L27,52 L29,55 L35,53 Z" />
+        <path
+            android:fillColor="#FF6DBF67"
+            android:pathData="M71,39 L68,45 L72,43.5 L76,48 L90,58 Z" />
+
+        <!-- Front range -->
+        <path
+            android:fillColor="#FF2E7D32"
+            android:pathData="M10,72 L28,58 L39,66 L55,53 L66,62 L90,54 L90,100 L10,100 Z" />
+        <path
+            android:fillColor="#FF4FA254"
+            android:pathData="M55,53 L49,59.5 L54,58 L57,63 L66,62 Z" />
+
+        <!-- Forest floor -->
+        <path
+            android:fillColor="#FF164A28"
+            android:pathData="M10,78 C24,71 36,77 50,73 C62,70 74,74 90,70 L90,100 L10,100 Z" />
+
+        <!-- River path -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeWidth="5.5"
+            android:strokeLineCap="round"
+            android:pathData="M59,61 C46,64 62,71 49,75 C37,78.5 50,84 41,93">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="58" android:startY="61"
+                    android:endX="42" android:endY="93">
+                    <item android:offset="0" android:color="#FFB7DDB0" />
+                    <item android:offset="1" android:color="#FFE9F5E3" />
+                </gradient>
+            </aapt:attr>
+        </path>
+    </group>
+
+    <!-- Rim break behind the satellite -->
+    <path
+        android:fillColor="#FF0B1F14"
+        android:pathData="M78,17m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0" />
+
+    <!-- Signal arcs -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFE9F5E3"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M66.5,21.5 A7,7 0,0 0,73.5 28.5" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFE9F5E3"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M61.5,21 A12,12 0,0 0,74 33.5" />
+
+    <!-- Satellite -->
+    <group
+        android:pivotX="80"
+        android:pivotY="15"
+        android:rotation="45">
+        <path
+            android:fillColor="#FFE9F5E3"
+            android:pathData="M76.5,11.5h7v7h-7z" />
+        <path
+            android:fillColor="#FFD7EBC9"
+            android:pathData="M69,13h6v4h-6z M85,13h6v4h-6z" />
+        <path
+            android:fillColor="#FFE9F5E3"
+            android:pathData="M75,14.5h1.5v1h-1.5z M83.5,14.5h1.5v1h-1.5z" />
+    </group>
+</vector>

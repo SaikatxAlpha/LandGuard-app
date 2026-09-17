@@ -18,6 +18,8 @@ import com.example.landguard.data.network.DeviceRegisterRequest
 import com.example.landguard.data.network.LandGuardApiService
 import com.example.landguard.ui.app.BackendSetupScreen
 import com.example.landguard.ui.app.LandGuardAppUI
+import com.example.landguard.ui.brand.SystemBarIcons
+import com.example.landguard.ui.startup.LandGuardStartup
 import com.example.landguard.ui.theme.LandGuardTheme
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.AndroidEntryPoint
@@ -56,29 +58,19 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Launch experience is dark (light icons); the main app switches to dark icons itself.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
         super.onCreate(savedInstanceState)
         android.util.Log.e(
             "LandGuardFCM",
             "MAIN ACTIVITY UPDATED BUILD IS RUNNING"
         )
-        
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } else {
-                startupPromptsSettled.value = true
-            }
-        } else {
-            startupPromptsSettled.value = true
-        }
+
+        // Notification permission is requested once the user reaches the app
+        // (after splash / onboarding) — see requestNotificationPermissionIfNeeded().
 
         // ---------------------------------------------------------
         // NEARBY CONNECTIONS OFFLINE MESH (PHASE B)
@@ -130,31 +122,59 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             LandGuardTheme {
-                var isBackendConfigured by remember {
-                    mutableStateOf(sharedPrefs.getString("base_url", "")?.isNotBlank() == true)
-                }
+                LandGuardStartup(
+                    skipIntro = alertId != null,
+                    onEnteredApp = { requestNotificationPermissionIfNeeded() }
+                ) {
+                    var isBackendConfigured by remember {
+                        mutableStateOf(sharedPrefs.getString("base_url", "")?.isNotBlank() == true)
+                    }
 
-                if (!isBackendConfigured) {
-                    BackendSetupScreen(
-                        onUrlSaved = { url ->
-                            sharedPrefs.edit().putString("base_url", url).apply()
-                            isBackendConfigured = true
+                    // Server setup keeps the dark brand look; the main app is light.
+                    SystemBarIcons(darkIcons = isBackendConfigured)
+
+                    if (!isBackendConfigured) {
+                        BackendSetupScreen(
+                            onUrlSaved = { url ->
+                                sharedPrefs.edit().putString("base_url", url).apply()
+                                isBackendConfigured = true
+                                registerFcmDeviceToken()
+                            }
+                        )
+                    } else {
+                        LaunchedEffect(Unit) {
                             registerFcmDeviceToken()
                         }
-                    )
-                } else {
-                    LaunchedEffect(Unit) {
-                        registerFcmDeviceToken()
+                        LandGuardAppUI(
+                            notificationAlertId = alertId,
+                            canPromptForLocation = startupPromptsSettled.value,
+                            onChangeBackendRequest = {
+                                isBackendConfigured = false
+                            }
+                        )
                     }
-                    LandGuardAppUI(
-                        notificationAlertId = alertId,
-                        canPromptForLocation = startupPromptsSettled.value,
-                        onChangeBackendRequest = {
-                            isBackendConfigured = false
-                        }
-                    )
                 }
             }
+        }
+    }
+
+    private var notificationPromptRequested = false
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (notificationPromptRequested) return
+        notificationPromptRequested = true
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                startupPromptsSettled.value = true
+            }
+        } else {
+            startupPromptsSettled.value = true
         }
     }
 
