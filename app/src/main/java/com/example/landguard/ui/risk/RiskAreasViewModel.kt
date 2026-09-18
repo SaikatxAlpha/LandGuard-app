@@ -3,189 +3,220 @@ package com.example.landguard.ui.risk
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.landguard.data.regional.CatalogSnapshot
+import com.example.landguard.data.regional.DataResult
+import com.example.landguard.data.regional.HotspotConditions
+import com.example.landguard.data.regional.LandslideHotspot
+import com.example.landguard.data.regional.LocationAnalysis
+import com.example.landguard.data.regional.NortheastRegion
+import com.example.landguard.data.regional.RegionalMonitoringRepository
+import com.example.landguard.data.regional.RiskIndex
 import com.example.landguard.data.repository.AlertRepository
-import com.example.landguard.data.repository.SatelliteRepository
-import com.example.landguard.data.repository.ZoneRepository
 import com.example.landguard.domain.model.Alert
 import com.example.landguard.domain.model.AlertStatus
-import com.example.landguard.domain.model.GroundDeformationPoint
 import com.example.landguard.domain.model.Severity
-import com.example.landguard.domain.model.Zone
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.math.abs
 
 /**
- * A monitored area ranked for the "Risk Areas" view.
- * Built purely from existing repository data — no risk logic is changed.
+ * A monitored area: a cluster of recorded landslides (NASA Global Landslide
+ * Catalog) with live rainfall / slope context. All metrics are nullable —
+ * null means the real value could not be obtained.
  */
 @Immutable
 data class RiskArea(
     val id: String,
     val name: String,
+    val state: String,
     val latitude: Double,
     val longitude: Double,
     val severity: Severity,
     val score: Int,
+    val risk: RiskIndex,
+    val eventCount: Int,
+    val fatalities: Int,
+    val lastEventMillis: Long?,
+    val dominantTrigger: String?,
+    val rain72hMm: Double?,
+    val rainNext24hMm: Double?,
+    val soilMoisturePct: Int?,
+    val slopeDegrees: Double?,
     val alertCount: Int,
     val activeAlertCount: Int,
-    val displacementMmPerYr: Double,
-    val soilMoisturePercent: Int,
-    val slopeDegrees: Double,
-    val ndvi: Double,
-    val lastUpdated: String,
     val latestAlert: Alert?
 )
+
+sealed interface AnalysisState {
+    data object Loading : AnalysisState
+    data class Ready(val analysis: LocationAnalysis) : AnalysisState
+}
 
 @Immutable
 data class RiskAreasUiState(
     val isLoading: Boolean = true,
     val areas: List<RiskArea> = emptyList(),
-    val activeAlerts: Int = 0
+    val activeAlerts: Int = 0,
+    /** Set when the monitored-area catalog could not be loaded at all. */
+    val catalogError: String? = null,
+    val catalogEventCount: Int = 0,
+    val catalogFirstYear: Int? = null,
+    val catalogLastYear: Int? = null,
+    val catalogFetchedAtMillis: Long? = null,
+    val catalogFromCache: Boolean = false,
+    val conditionsUpdatedAtMillis: Long? = null,
+    val statesCovered: List<Pair<String, Int>> = emptyList()
 ) {
     fun countFor(severity: Severity) = areas.count { it.severity == severity }
 }
 
 @HiltViewModel
 class RiskAreasViewModel @Inject constructor(
-    zoneRepository: ZoneRepository,
-    satelliteRepository: SatelliteRepository,
+    private val regional: RegionalMonitoringRepository,
     alertRepository: AlertRepository
 ) : ViewModel() {
 
-    private val zonesFlow = flow {
-        val zones = zoneRepository.refreshZones().getOrNull()
-            ?: zoneRepository.observeZones().first()
-        emit(zones)
-    }.catch { emit(emptyList()) }
-
     val uiState: StateFlow<RiskAreasUiState> = combine(
-        zonesFlow,
-        satelliteRepository.observeDeformationPoints().catch { emit(emptyList()) },
+        regional.catalog,
+        regional.hotspotConditions,
+        regional.conditionsUpdatedAtMillis,
         alertRepository.observeHistory().catch { emit(emptyList()) }
-    ) { zones, points, alerts ->
-        val areas = buildAreas(zones, points, alerts)
-        RiskAreasUiState(
-            isLoading = false,
-            areas = areas,
-            activeAlerts = alerts.count { it.status != AlertStatus.RESOLVED }
-        )
+    ) { catalog, conditions, conditionsAt, alerts ->
+        buildState(catalog, conditions, conditionsAt, alerts)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = RiskAreasUiState()
     )
-}
 
-// ─────────────────────────────────────────────────────────────
-// Ranking
-// ─────────────────────────────────────────────────────────────
+    private val _userAnalysis = MutableStateFlow<AnalysisState?>(null)
+    val userAnalysis: StateFlow<AnalysisState?> = _userAnalysis.asStateFlow()
 
-private val GENERIC_NAME_WORDS = setOf(
-    "valley", "slope", "sector", "river", "ridge", "corridor", "gorge",
-    "terrace", "foothills", "observatory", "bypass", "hill", "zone", "area", "cut"
-)
+    private val _areaAnalysis = MutableStateFlow<Map<String, AnalysisState>>(emptyMap())
+    val areaAnalysis: StateFlow<Map<String, AnalysisState>> = _areaAnalysis.asStateFlow()
 
-private fun buildAreas(
-    zones: List<Zone>,
-    points: List<GroundDeformationPoint>,
-    alerts: List<Alert>
-): List<RiskArea> {
-    val fromZones = zones.map { zone ->
-        areaOf(
-            id = zone.id,
-            name = zone.name,
-            lat = zone.latitude,
-            lng = zone.longitude,
-            severity = zone.riskLevel,
-            displacement = zone.alos4DisplacementMmPerYr,
-            moisture = zone.soilMoisturePercent,
-            slope = zone.slopeDegrees,
-            ndvi = zone.sentinel2Ndvi,
-            updated = zone.lastUpdated,
-            alerts = alerts
+    private var userJob: Job? = null
+
+    init {
+        refresh()
+    }
+
+    fun refresh(force: Boolean = false) {
+        viewModelScope.launch {
+            regional.refreshCatalog(force)
+            regional.refreshConditions(force)
+        }
+    }
+
+    /** Analyse the device location from real satellite / weather / terrain sources. */
+    fun analyzeUserLocation(lat: Double, lng: Double, force: Boolean = false) {
+        val current = (_userAnalysis.value as? AnalysisState.Ready)?.analysis
+        if (!force && current != null &&
+            RegionalDistance.km(current.latitude, current.longitude, lat, lng) < 1.0 &&
+            System.currentTimeMillis() - current.analysedAtMillis < 30 * 60 * 1000L
+        ) return
+        userJob?.cancel()
+        userJob = viewModelScope.launch {
+            if (_userAnalysis.value == null || force) _userAnalysis.value = AnalysisState.Loading
+            regional.refreshCatalog()
+            _userAnalysis.value = AnalysisState.Ready(regional.analyzeLocation(lat, lng, force))
+        }
+    }
+
+    fun analyzeArea(area: RiskArea, force: Boolean = false) {
+        if (!force && _areaAnalysis.value[area.id] != null) return
+        _areaAnalysis.value = _areaAnalysis.value + (area.id to AnalysisState.Loading)
+        viewModelScope.launch {
+            val result = regional.analyzeLocation(area.latitude, area.longitude, force)
+            _areaAnalysis.value = _areaAnalysis.value + (area.id to AnalysisState.Ready(result))
+        }
+    }
+
+    private fun buildState(
+        catalog: DataResult<CatalogSnapshot>?,
+        conditions: Map<String, HotspotConditions>,
+        conditionsAt: Long?,
+        alerts: List<Alert>
+    ): RiskAreasUiState {
+        val activeAlerts = alerts.count { it.status != AlertStatus.RESOLVED }
+        return when (catalog) {
+            null -> RiskAreasUiState(isLoading = true, activeAlerts = activeAlerts)
+            is DataResult.Unavailable -> RiskAreasUiState(
+                isLoading = false,
+                activeAlerts = activeAlerts,
+                catalogError = catalog.reason
+            )
+            is DataResult.Available -> {
+                val snapshot = catalog.value
+                val areas = snapshot.hotspots
+                    .map { toArea(it, conditions[it.id], alerts) }
+                    .sortedWith(compareByDescending<RiskArea> { it.score }.thenByDescending { it.eventCount })
+                val years = snapshot.events.mapNotNull { it.dateMillis }.map { yearOf(it) }
+                RiskAreasUiState(
+                    isLoading = false,
+                    areas = areas,
+                    activeAlerts = activeAlerts,
+                    catalogEventCount = snapshot.events.size,
+                    catalogFirstYear = years.minOrNull(),
+                    catalogLastYear = years.maxOrNull(),
+                    catalogFetchedAtMillis = snapshot.fetchedAtMillis,
+                    catalogFromCache = snapshot.fromCache,
+                    conditionsUpdatedAtMillis = conditionsAt,
+                    statesCovered = NortheastRegion.STATES.map { state ->
+                        state to snapshot.events.count { it.state == state }
+                    }
+                )
+            }
+        }
+    }
+
+    private fun toArea(h: LandslideHotspot, c: HotspotConditions?, alerts: List<Alert>): RiskArea {
+        val risk = regional.hotspotRisk(h, c)
+        val keywords = (listOf(h.name) + h.events.mapNotNull { it.nearestPlace })
+            .flatMap { it.split(' ', ',', '-', '(', ')') }
+            .map { it.trim().lowercase() }
+            .filter { it.length >= 5 }
+            .toSet()
+        val related = alerts.filter { alert ->
+            val haystack = "${alert.affectedLocation} ${alert.title}".lowercase()
+            alert.parcelId == h.id || keywords.any { haystack.contains(it) }
+        }
+        return RiskArea(
+            id = h.id,
+            name = h.name,
+            state = h.state,
+            latitude = h.latitude,
+            longitude = h.longitude,
+            severity = risk.severity,
+            score = risk.score,
+            risk = risk,
+            eventCount = h.eventCount,
+            fatalities = h.fatalities,
+            lastEventMillis = h.lastEventMillis,
+            dominantTrigger = h.dominantTrigger,
+            rain72hMm = c?.rainfall?.past72hMm,
+            rainNext24hMm = c?.rainfall?.next24hMm,
+            soilMoisturePct = c?.rainfall?.soilMoistureM3M3?.let { (it * 100).toInt() },
+            slopeDegrees = c?.terrain?.slopeDeg,
+            alertCount = related.size,
+            activeAlertCount = related.count { it.status != AlertStatus.RESOLVED },
+            latestAlert = related.firstOrNull()
         )
     }
 
-    // Include deformation points that are not already represented by a zone.
-    val fromPoints = points
-        .filter { point ->
-            zones.none { abs(it.latitude - point.latitude) < 0.01 && abs(it.longitude - point.longitude) < 0.01 }
-        }
-        .map { point ->
-            areaOf(
-                id = point.id,
-                name = point.label,
-                lat = point.latitude,
-                lng = point.longitude,
-                severity = point.riskSeverity,
-                displacement = point.displacementRateMmPerYear,
-                moisture = point.soilMoisturePercentage,
-                slope = point.slopeAngleDegrees,
-                ndvi = point.ndviScore,
-                updated = point.lastScanDate,
-                alerts = alerts
-            )
-        }
-
-    return (fromZones + fromPoints)
-        .sortedWith(compareByDescending<RiskArea> { it.score }.thenByDescending { it.activeAlertCount })
+    private fun yearOf(millis: Long): Int =
+        java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = millis }.get(java.util.Calendar.YEAR)
 }
 
-private fun areaOf(
-    id: String,
-    name: String,
-    lat: Double,
-    lng: Double,
-    severity: Severity,
-    displacement: Double,
-    moisture: Int,
-    slope: Double,
-    ndvi: Double,
-    updated: String,
-    alerts: List<Alert>
-): RiskArea {
-    val keywords = name
-        .split(' ', '–', '-', ',', '(', ')')
-        .map { it.trim().lowercase() }
-        .filter { it.length >= 5 && it !in GENERIC_NAME_WORDS }
-
-    val related = alerts.filter { alert ->
-        val haystack = "${alert.affectedLocation} ${alert.title}".lowercase()
-        alert.parcelId == id || keywords.any { haystack.contains(it) }
-    }
-    val active = related.count { it.status != AlertStatus.RESOLVED }
-
-    val base = when (severity) {
-        Severity.CRITICAL -> 70
-        Severity.HIGH -> 52
-        Severity.MODERATE -> 34
-        Severity.LOW -> 14
-    }
-    val activity = minOf(18, active * 6)
-    val movement = minOf(12.0, abs(displacement) * 0.3).toInt()
-
-    return RiskArea(
-        id = id,
-        name = name,
-        latitude = lat,
-        longitude = lng,
-        severity = severity,
-        score = (base + activity + movement).coerceIn(0, 100),
-        alertCount = related.size,
-        activeAlertCount = active,
-        displacementMmPerYr = displacement,
-        soilMoisturePercent = moisture,
-        slopeDegrees = slope,
-        ndvi = ndvi,
-        lastUpdated = updated,
-        latestAlert = related.firstOrNull()
-    )
+internal object RegionalDistance {
+    fun km(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double =
+        com.example.landguard.data.regional.RegionalAnalytics.distanceKm(lat1, lng1, lat2, lng2)
 }

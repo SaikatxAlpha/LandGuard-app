@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Radar
@@ -70,6 +72,7 @@ import com.example.landguard.ui.components.LandGuardWordmark
 import com.example.landguard.ui.components.MapControlButton
 import com.example.landguard.ui.components.MapFitAll
 import com.example.landguard.ui.components.MapFocus
+import com.example.landguard.ui.components.MapIntro
 import com.example.landguard.ui.components.MapStyleSwitcher
 import com.example.landguard.ui.components.MetricTile
 import com.example.landguard.ui.components.RiskMapStyle
@@ -84,7 +87,17 @@ import com.example.landguard.ui.location.LocationStatus
 import com.example.landguard.ui.location.UserLocation
 import com.example.landguard.ui.location.distanceKm
 import com.example.landguard.ui.location.formatDistance
+import com.example.landguard.ui.risk.AnalysisState
 import com.example.landguard.ui.risk.RiskArea
+import com.example.landguard.ui.monitor.LiveReadings
+import com.example.landguard.ui.monitor.headline
+import com.example.landguard.ui.monitor.historyLine
+import com.example.landguard.ui.monitor.summaryLine
+import com.example.landguard.data.regional.DataResult
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.example.landguard.ui.risk.RiskAreasViewModel
 import com.example.landguard.ui.theme.BgBorder
 import com.example.landguard.ui.theme.BgDeep
@@ -121,6 +134,9 @@ fun HomeScreen(
     var selectedAreaId by remember { mutableStateOf<String?>(null) }
     var mapStyle by remember { mutableStateOf(RiskMapStyle.STREETS) }
     var panelDismissed by remember { mutableStateOf(false) }
+    var threeD by remember { mutableStateOf(true) }
+    // The details panel rises in once the cinematic intro has landed.
+    var introDone by remember { mutableStateOf(MapIntro.played) }
     var showStyles by remember { mutableStateOf(false) }
     var focus by remember { mutableStateOf<MapFocus?>(null) }
     var fitAll by remember { mutableStateOf<MapFitAll?>(null) }
@@ -141,6 +157,18 @@ fun HomeScreen(
         else orderedAreas.filter { distanceKm(userLocation, it.latitude, it.longitude) <= NEARBY_RADIUS_KM }
     }
     val selectedArea = riskState.areas.firstOrNull { it.id == selectedAreaId }
+
+    val userAnalysis by riskViewModel.userAnalysis.collectAsStateWithLifecycle()
+    val areaAnalysis by riskViewModel.areaAnalysis.collectAsStateWithLifecycle()
+
+    // Analyse the GPS position with real satellite / weather / terrain data.
+    LaunchedEffect(userLocation) {
+        userLocation?.let { riskViewModel.analyzeUserLocation(it.latitude, it.longitude) }
+    }
+    // Fetch real Sentinel readings for an area when it is opened.
+    LaunchedEffect(selectedArea?.id) {
+        selectedArea?.let { riskViewModel.analyzeArea(it) }
+    }
 
     fun focusOn(area: RiskArea) {
         selectedAreaId = area.id
@@ -168,6 +196,9 @@ fun HomeScreen(
             fitAll = fitAll,
             topInset = 110.dp,
             bottomInset = 300.dp,
+            threeD = threeD,
+            cinematicIntro = true,
+            onIntroFinished = { introDone = true },
             modifier = Modifier.fillMaxSize()
         )
 
@@ -275,6 +306,12 @@ fun HomeScreen(
                     }
                 )
                 MapControlButton(
+                    icon = if (threeD) Icons.Filled.ViewInAr else Icons.Filled.Map,
+                    contentDescription = if (threeD) "Switch to 2D" else "Switch to 3D",
+                    active = threeD,
+                    onClick = { threeD = !threeD }
+                )
+                MapControlButton(
                     icon = Icons.Filled.Layers,
                     contentDescription = "Map style",
                     active = showStyles,
@@ -292,10 +329,10 @@ fun HomeScreen(
         }
 
         // ── Bottom panel ───────────────────────────────────────────────────
-        val panelVisible = remember { MutableTransitionState(false).apply { targetState = true } }
         AnimatedVisibility(
-            visibleState = panelVisible,
-            enter = slideInVertically(tween(420)) { it / 2 } + fadeIn(tween(420)),
+            visible = introDone,
+            enter = slideInVertically(tween(520)) { it } + fadeIn(tween(420)),
+            exit = fadeOut(tween(200)),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
@@ -319,6 +356,8 @@ fun HomeScreen(
                 when (target) {
                     HomePanel.Nearby -> NearbyPanel(
                         isLoading = riskState.isLoading,
+                        catalogError = riskState.catalogError,
+                        userAnalysis = userAnalysis,
                         locationStatus = locationState.status,
                         userLocation = userLocation,
                         nearbyAreas = nearbyAreas,
@@ -345,6 +384,7 @@ fun HomeScreen(
 
                     is HomePanel.Detail -> AreaDetailPanel(
                         area = target.area,
+                        analysis = areaAnalysis[target.area.id],
                         userLocation = userLocation,
                         onClose = { selectedAreaId = null },
                         onAnalyze = onOpenMap,
@@ -472,6 +512,8 @@ private fun LocationChip(
 @Composable
 private fun NearbyPanel(
     isLoading: Boolean,
+    catalogError: String?,
+    userAnalysis: AnalysisState?,
     locationStatus: LocationStatus,
     userLocation: UserLocation?,
     nearbyAreas: List<RiskArea>,
@@ -487,7 +529,8 @@ private fun NearbyPanel(
     val cards = if (nearbyAreas.isNotEmpty()) nearbyAreas else orderedAreas
 
     val (headline, subline) = when {
-        isLoading -> "Scanning terrain…" to "Loading monitored areas"
+        isLoading -> "Loading Northeast India…" to "Fetching recorded landslides and live rainfall"
+        catalogError != null -> "Monitored areas unavailable" to catalogError
         userLocation == null && locationStatus != LocationStatus.READY ->
             "Monitored risk areas" to "${orderedAreas.size} areas · $activeAlerts active alerts"
         nearbyAreas.isEmpty() ->
@@ -566,6 +609,11 @@ private fun NearbyPanel(
                 }
             }
 
+            if (userLocation != null) {
+                Spacer(Modifier.height(12.dp))
+                YourLocationRow(userAnalysis, Modifier.padding(horizontal = 16.dp))
+            }
+
             if (latestAlert != null) {
                 Spacer(Modifier.height(12.dp))
                 Row(
@@ -642,10 +690,7 @@ private fun NearbyAreaCard(
         )
         Spacer(Modifier.height(3.dp))
         Text(
-            text = buildString {
-                append("${"%.1f".format(area.displacementMmPerYr)} mm/yr")
-                if (area.activeAlertCount > 0) append(" · ${area.activeAlertCount} alert${if (area.activeAlertCount > 1) "s" else ""}")
-            },
+            text = area.summaryLine(),
             color = TextMuted,
             fontSize = 11.sp,
             maxLines = 1
@@ -685,6 +730,7 @@ fun RiskScoreBar(score: Int, severity: Severity, modifier: Modifier = Modifier) 
 @Composable
 private fun AreaDetailPanel(
     area: RiskArea,
+    analysis: AnalysisState?,
     userLocation: UserLocation?,
     onClose: () -> Unit,
     onAnalyze: () -> Unit,
@@ -697,7 +743,12 @@ private fun AreaDetailPanel(
             .padding(horizontal = 12.dp),
         shape = RoundedCornerShape(26.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .heightIn(max = 520.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
+        ) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -720,9 +771,7 @@ private fun AreaDetailPanel(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (area.lastUpdated.isNotBlank()) {
-                        Text(area.lastUpdated, color = TextMuted, fontSize = 11.sp, maxLines = 1)
-                    }
+                    Text(area.historyLine(), color = TextMuted, fontSize = 11.sp, maxLines = 2)
                 }
                 MapControlButton(
                     icon = Icons.Filled.Close,
@@ -736,10 +785,23 @@ private fun AreaDetailPanel(
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetricTile("${area.score}", "Risk score", Modifier.weight(1f), accent = area.severity.accent)
-                MetricTile("%.1f".format(area.displacementMmPerYr), "mm/yr shift", Modifier.weight(1f))
-                MetricTile("${area.soilMoisturePercent}%", "Soil moisture", Modifier.weight(1f))
-                MetricTile("${area.slopeDegrees.toInt()}°", "Slope", Modifier.weight(1f))
+                MetricTile("${area.eventCount}", "Recorded slides", Modifier.weight(1f))
+                MetricTile(area.rain72hMm?.let { "%.0f".format(it) } ?: "—", "mm rain / 72 h", Modifier.weight(1f))
+                MetricTile(area.slopeDegrees?.let { "%.0f°".format(it) } ?: "—", "Slope", Modifier.weight(1f))
             }
+            if (area.rain72hMm == null || area.slopeDegrees == null) {
+                Text(
+                    "— = data unavailable",
+                    color = TextMuted,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text("Latest satellite & live readings", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            LiveReadings(state = analysis)
 
             area.latestAlert?.let { alert ->
                 Spacer(Modifier.height(12.dp))
@@ -809,5 +871,52 @@ fun PanelButton(
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// YOUR LOCATION — live readings summary
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun YourLocationRow(state: AnalysisState?, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(BgElevated)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Filled.MyLocation, null, tint = BrandPrimaryLight, modifier = Modifier.size(17.dp))
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Your location", color = TextSecondary, fontSize = 11.sp)
+            when (state) {
+                null, AnalysisState.Loading -> Text(
+                    "Fetching latest satellite and rainfall data…",
+                    color = TextPrimary,
+                    fontSize = 12.sp
+                )
+
+                is AnalysisState.Ready -> Text(
+                    state.analysis.headline(),
+                    color = TextPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        when (state) {
+            is AnalysisState.Ready -> when (val risk = state.analysis.risk) {
+                is DataResult.Available -> SeverityPill(risk.value.severity)
+                is DataResult.Unavailable -> Text("Risk: data\nunavailable", color = TextMuted, fontSize = 10.sp)
+            }
+
+            else -> CircularProgressIndicator(color = BrandPrimaryLight, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+        }
     }
 }

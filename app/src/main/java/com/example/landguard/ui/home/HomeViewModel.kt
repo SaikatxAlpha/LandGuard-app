@@ -29,7 +29,7 @@ data class HomeUiState(
     val forecastDays: List<ForecastDay> = emptyList(),
     val landCover: LandCoverBreakdown = LandCoverBreakdown(),
     val latestObservation: SatelliteObservation? = null,
-    val nextSatellitePass: String = "ALOS-4 • 3h 42m",
+    val nextSatellitePass: String = "",
     val totalMonitoredHa: Double = 0.0,
     val isOffline: Boolean = false,
     val errorMessage: String? = null
@@ -60,28 +60,9 @@ class HomeViewModel @Inject constructor(
                 parcelRepository.observeLandCoverBreakdown(),
                 satelliteRepository.observeDeformationPoints()
             ) { alerts, parcels, cover, points ->
-                val topPoint = points.firstOrNull()
-                val latestObs = topPoint?.let {
-                    SatelliteObservation(
-                        id                    = "obs_${it.id}",
-                        provider              = "JAXA ALOS-4 & ESA Copernicus Sentinel-2",
-                        locationName          = it.label,
-                        observationDate       = it.lastScanDate,
-                        detectedChange        = "Surface displacement & vegetation stress event",
-                        confidencePercentage  = 92,
-                        ndviIndex             = it.ndviScore,
-                        soilMoistureIndex     = it.soilMoisturePercentage / 100.0,
-                        groundShiftMmPerYr    = it.displacementRateMmPerYear,
-                        radarBackscatterDb    = it.radarBackscatterDb,
-                        slopeAngleDegrees     = it.slopeAngleDegrees,
-                        orbitDetails          = "Descending Path 114 / Frame 0680",
-                        spatialResolution     = "3m L-Band SAR + 10m Optical",
-                        polarization          = "HH + HV Dual Polarimetric",
-                        cloudCoverPercentage  = 0.0,
-                        recommendedAction     = "Trigger drone topography scan & issue local slope advisories",
-                        isDemoData            = true
-                    )
-                }
+                // Real per-location satellite readings live in RegionalMonitoringRepository;
+                // no synthetic "latest observation" is constructed here.
+                val latestObs: SatelliteObservation? = null
                 val totalHa = parcels.sumOf { it.areaHectares }
                 HomeUiState(
                     isLoading           = false,
@@ -91,7 +72,7 @@ class HomeViewModel @Inject constructor(
                     forecastDays        = _uiState.value.forecastDays,
                     landCover           = cover,
                     latestObservation   = latestObs,
-                    nextSatellitePass   = "ALOS-4 • 3h 42m",
+                    nextSatellitePass   = "",
                     totalMonitoredHa    = totalHa,
                     isOffline           = false
                 )

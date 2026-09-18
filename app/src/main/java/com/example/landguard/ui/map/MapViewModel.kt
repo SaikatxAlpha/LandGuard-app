@@ -2,6 +2,10 @@ package com.example.landguard.ui.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.landguard.data.regional.DataResult
+import com.example.landguard.data.regional.LocationAnalysis
+import com.example.landguard.data.regional.RegionalMonitoringRepository
+import com.example.landguard.data.regional.valueOrNull
 import com.example.landguard.data.repository.SatelliteRepository
 import com.example.landguard.data.repository.ZoneRepository
 import com.example.landguard.domain.model.GroundDeformationPoint
@@ -12,11 +16,15 @@ import com.example.landguard.domain.model.SatelliteScene
 import com.example.landguard.domain.model.SatelliteSource
 import com.example.landguard.domain.model.Zone
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 data class MapUiState(
@@ -40,11 +48,16 @@ data class MapUiState(
 @HiltViewModel
 class MapViewModel @Inject constructor(
     private val zoneRepository: ZoneRepository,
-    private val satelliteRepository: SatelliteRepository
+    private val satelliteRepository: SatelliteRepository,
+    private val regional: RegionalMonitoringRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
+
+    /** Real satellite readings fetched for points the user selected. */
+    private val enriched = mutableMapOf<String, LocationAnalysis>()
+    private var enrichJob: Job? = null
 
     init {
         loadData()
@@ -53,7 +66,17 @@ class MapViewModel @Inject constructor(
     private fun loadData() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            
+
+            // Load the monitored areas across Northeast India (real catalog + live conditions).
+            launch {
+                val zones = zoneRepository.refreshZones()
+                _uiState.value = _uiState.value.copy(
+                    zones = zones.getOrDefault(_uiState.value.zones),
+                    errorMessage = zones.exceptionOrNull()?.message,
+                    isLoading = regional.catalog.value == null
+                )
+            }
+
             combine(
                 satelliteRepository.observeDeformationPoints(),
                 satelliteRepository.observeScenes(),
@@ -62,24 +85,19 @@ class MapViewModel @Inject constructor(
             ) { points, scenes, overpasses, config ->
                 Quadruple(points, scenes, overpasses, config)
             }.collect { (points, scenes, overpasses, config) ->
-                zoneRepository.refreshZones()
-                    .onSuccess { zones ->
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            zones = zones,
-                            deformationPoints = points,
-                            scenes = scenes,
-                            overpasses = overpasses,
-                            apiConfig = config,
-                            selectedPoint = points.firstOrNull()
-                        )
-                    }
-                    .onFailure { err ->
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            errorMessage = err.message
-                        )
-                    }
+                val merged = points.map { applyEnrichment(it) }
+                val previousId = _uiState.value.selectedPoint?.id
+                val selected = merged.firstOrNull { it.id == previousId } ?: merged.firstOrNull()
+                _uiState.value = _uiState.value.copy(
+                    isLoading = regional.catalog.value == null,
+                    deformationPoints = merged,
+                    scenes = scenes,
+                    overpasses = overpasses,
+                    apiConfig = config,
+                    selectedPoint = selected,
+                    errorMessage = (regional.catalog.value as? DataResult.Unavailable)?.reason
+                )
+                if (selected != null && selected.id != previousId) enrich(selected)
             }
         }
     }
@@ -105,7 +123,40 @@ class MapViewModel @Inject constructor(
     }
 
     fun selectDeformationPoint(point: GroundDeformationPoint?) {
-        _uiState.value = _uiState.value.copy(selectedPoint = point)
+        _uiState.value = _uiState.value.copy(selectedPoint = point?.let { applyEnrichment(it) })
+        point?.let { enrich(it) }
+    }
+
+    /** Fetch real Sentinel-2 / Sentinel-1 readings for the selected point. */
+    private fun enrich(point: GroundDeformationPoint) {
+        if (enriched.containsKey(point.id)) return
+        enrichJob?.cancel()
+        enrichJob = viewModelScope.launch {
+            val analysis = regional.analyzeLocation(point.latitude, point.longitude)
+            enriched[point.id] = analysis
+            _uiState.value = _uiState.value.copy(
+                deformationPoints = _uiState.value.deformationPoints.map { applyEnrichment(it) },
+                selectedPoint = _uiState.value.selectedPoint?.let { applyEnrichment(it) }
+            )
+        }
+    }
+
+    private fun applyEnrichment(point: GroundDeformationPoint): GroundDeformationPoint {
+        val analysis = enriched[point.id] ?: return point
+        val optical = analysis.optical.valueOrNull()
+        val sar = analysis.sar.valueOrNull()
+        val format = SimpleDateFormat("d MMM yyyy", Locale.US)
+        return point.copy(
+            ndviScore = optical?.ndvi?.let { Math.round(it * 100) / 100.0 } ?: Double.NaN,
+            radarBackscatterDb = sar?.vvDb?.let { Math.round(it * 10) / 10.0 } ?: Double.NaN,
+            slopeAngleDegrees = analysis.terrain.valueOrNull()?.slopeDeg?.let { Math.round(it * 10) / 10.0 }
+                ?: point.slopeAngleDegrees,
+            lastScanDate = listOf(
+                optical?.let { "Sentinel-2 ${format.format(Date(it.acquiredMillis))}" } ?: "Sentinel-2: data unavailable",
+                sar?.let { "Sentinel-1 ${format.format(Date(it.acquiredMillis))}" } ?: "Sentinel-1: data unavailable",
+                "ALOS-4: data unavailable"
+            ).joinToString(" · ")
+        )
     }
 
     fun selectZone(zone: Zone?) {
@@ -132,7 +183,11 @@ class MapViewModel @Inject constructor(
     }
 
     fun refresh() {
-        loadData()
+        enriched.clear()
+        viewModelScope.launch {
+            regional.refreshCatalog(force = true)
+            regional.refreshConditions(force = true)
+        }
     }
 }
 

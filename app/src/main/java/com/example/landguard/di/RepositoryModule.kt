@@ -51,4 +51,9 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindRiskEngineService(impl: RiskEngineServiceImpl): RiskEngineService
+
+    @Binds @Singleton
+    abstract fun bindRegionalMonitoringRepository(
+        impl: com.example.landguard.data.regional.RegionalMonitoringRepositoryImpl
+    ): com.example.landguard.data.regional.RegionalMonitoringRepository
 }

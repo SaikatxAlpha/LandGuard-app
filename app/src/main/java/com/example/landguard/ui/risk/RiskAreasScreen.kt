@@ -78,6 +78,10 @@ import com.example.landguard.ui.components.pressClickable
 import com.example.landguard.ui.home.FloatingNavClearance
 import com.example.landguard.ui.home.PanelButton
 import com.example.landguard.ui.home.RiskScoreBar
+import com.example.landguard.ui.monitor.formatTime
+import com.example.landguard.ui.monitor.summaryLine
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.ui.text.style.TextAlign
 import com.example.landguard.ui.location.LocalRequestUserLocation
 import com.example.landguard.ui.location.LocalUserLocation
 import com.example.landguard.ui.location.UserLocation
@@ -107,13 +111,16 @@ fun RiskAreasScreen(
 
     var view by remember { mutableStateOf(RiskView.LIST) }
     var filter by remember { mutableStateOf<Severity?>(null) }
+    var stateFilter by remember { mutableStateOf<String?>(null) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var focus by remember { mutableStateOf<MapFocus?>(null) }
     var fitAll by remember { mutableStateOf<MapFitAll?>(null) }
     var token by remember { mutableIntStateOf(0) }
 
-    val visibleAreas = remember(state.areas, filter) {
-        if (filter == null) state.areas else state.areas.filter { it.severity == filter }
+    val visibleAreas = remember(state.areas, filter, stateFilter) {
+        state.areas
+            .filter { filter == null || it.severity == filter }
+            .filter { stateFilter == null || it.state == stateFilter }
     }
     val carouselState = rememberLazyListState()
 
@@ -123,7 +130,7 @@ fun RiskAreasScreen(
     }
 
     // Frame the filtered set whenever the filter changes.
-    LaunchedEffect(filter, state.areas.size) {
+    LaunchedEffect(filter, stateFilter, state.areas.size) {
         if (state.areas.isNotEmpty()) fitAll = MapFitAll(++token)
     }
 
@@ -148,7 +155,7 @@ fun RiskAreasScreen(
             onMapBackgroundClick = { selectedId = null },
             focus = focus,
             fitAll = fitAll,
-            topInset = 190.dp,
+            topInset = 262.dp,
             bottomInset = 260.dp,
             modifier = Modifier.fillMaxSize()
         )
@@ -162,6 +169,8 @@ fun RiskAreasScreen(
             RankedList(
                 areas = visibleAreas,
                 isLoading = state.isLoading,
+                error = state.catalogError,
+                onRetry = { viewModel.refresh(force = true) },
                 userLocation = userLocation,
                 onAreaClick = { area ->
                     view = RiskView.MAP
@@ -194,7 +203,7 @@ fun RiskAreasScreen(
                         letterSpacing = (-0.5).sp
                     )
                     Text(
-                        text = "Ranked by severity and alert activity",
+                        text = "Northeast India · ranked by landslide record, live rainfall and slope",
                         color = TextSecondary,
                         fontSize = 12.sp
                     )
@@ -208,6 +217,20 @@ fun RiskAreasScreen(
                 filter = if (filter == it) null else it
                 selectedId = null
             })
+
+            if (state.statesCovered.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                StateFilter(
+                    states = state.statesCovered,
+                    selected = stateFilter,
+                    onSelect = {
+                        stateFilter = if (stateFilter == it) null else it
+                        selectedId = null
+                    }
+                )
+            }
+
+            ProvenanceLine(state)
         }
 
         // ── Map-mode controls & carousel ───────────────────────────────────
@@ -362,6 +385,8 @@ private fun SeveritySummary(
 private fun RankedList(
     areas: List<RiskArea>,
     isLoading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
     userLocation: UserLocation?,
     onAreaClick: (RiskArea) -> Unit
 ) {
@@ -373,6 +398,21 @@ private fun RankedList(
         when {
             isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = BrandPrimaryLight, strokeWidth = 2.dp)
+            }
+
+            error != null -> Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Filled.CloudOff, null, tint = TextMuted, modifier = Modifier.size(36.dp))
+                Spacer(Modifier.height(10.dp))
+                Text("Data unavailable", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text(error, color = TextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(14.dp))
+                PanelButton("Retry", primary = true, onClick = onRetry, modifier = Modifier.width(140.dp))
             }
 
             areas.isEmpty() -> Column(
@@ -390,7 +430,7 @@ private fun RankedList(
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
-                    top = 190.dp,
+                    top = 262.dp,
                     bottom = FloatingNavClearance + 40.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -466,11 +506,7 @@ private fun RankedAreaRow(
                 SeverityPill(area.severity)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = buildString {
-                        if (area.activeAlertCount > 0) append("${area.activeAlertCount} active · ")
-                        append("${"%.1f".format(area.displacementMmPerYr)} mm/yr")
-                        distance?.let { append(" · $it") }
-                    },
+                    text = area.summaryLine(distance),
                     color = TextMuted,
                     fontSize = 11.sp,
                     maxLines = 1,
@@ -551,7 +587,7 @@ private fun CarouselCard(
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    text = "${area.activeAlertCount} active alerts · ${"%.1f".format(area.displacementMmPerYr)} mm/yr · ${area.slopeDegrees.toInt()}° slope",
+                    text = "${area.state} · " + area.summaryLine(),
                     color = TextMuted,
                     fontSize = 11.sp,
                     maxLines = 1,
@@ -580,4 +616,59 @@ private fun CarouselCard(
             }
         }
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// REGION FILTER & PROVENANCE
+// ═════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun StateFilter(
+    states: List<Pair<String, Int>>,
+    selected: String?,
+    onSelect: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        states.forEach { (name, count) ->
+            val isSelected = selected == name
+            val bg by animateColorAsState(if (isSelected) BrandPrimary else BgSurface, tween(200), label = "stateBg")
+            Text(
+                text = "$name  $count",
+                color = if (isSelected) Color.White else TextSecondary,
+                fontSize = 11.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(bg)
+                    .border(1.dp, if (isSelected) BrandPrimary else BgBorder, RoundedCornerShape(10.dp))
+                    .pressClickable { onSelect(name) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProvenanceLine(state: RiskAreasUiState) {
+    if (state.catalogEventCount == 0) return
+    val text = buildString {
+        append("${state.catalogEventCount} recorded landslides")
+        if (state.catalogFirstYear != null && state.catalogLastYear != null) {
+            append(" (${state.catalogFirstYear}–${state.catalogLastYear})")
+        }
+        append(", NASA Global Landslide Catalog")
+        if (state.catalogFromCache) state.catalogFetchedAtMillis?.let { append(" · cached ${formatTime(it)}") }
+        append(" · rainfall: ")
+        append(state.conditionsUpdatedAtMillis?.let { "Open-Meteo, updated ${formatTime(it)}" } ?: "data unavailable")
+    }
+    Text(
+        text = text,
+        color = TextMuted,
+        fontSize = 10.sp,
+        lineHeight = 13.sp,
+        modifier = Modifier.padding(top = 8.dp)
+    )
 }
