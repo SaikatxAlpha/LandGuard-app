@@ -2,8 +2,12 @@ package com.example.landguard.data.regional
 
 import android.content.Context
 import android.util.Log
+import com.example.landguard.data.alerts.AlertContract
+import com.example.landguard.data.network.LandGuardApiService
+import com.example.landguard.data.network.MonitoringZoneDto
 import com.example.landguard.domain.service.RiskEngineService
 import com.google.gson.Gson
+import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -37,6 +41,12 @@ import javax.inject.Singleton
  *
  * Missing inputs are reported as [DataResult.Unavailable]; nothing is
  * interpolated, simulated or substituted.
+ *
+ * Single source of truth: the LandGuard backend runs this exact model
+ * (backend/services/monitoring) for the authority control center, so the
+ * catalog, conditions, risk scores and location analyses are read from it
+ * first. The public sources are queried directly only when the backend
+ * cannot be reached, so the app keeps working in the field.
  */
 interface RegionalMonitoringRepository {
     /** null while the first load is in progress. */
@@ -57,7 +67,8 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
     private val catalogClient: LandslideCatalogClient,
     private val satellite: SatelliteAnalyzer,
     private val meteo: OpenMeteoClient,
-    private val riskEngine: RiskEngineService
+    private val riskEngine: RiskEngineService,
+    private val api: LandGuardApiService
 ) : RegionalMonitoringRepository {
 
     private val tag = "LandGuardRegional"
@@ -82,6 +93,10 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
     private val terrainFile get() = File(context.filesDir, "ne_terrain_cache.json")
     private var terrainLoaded = false
 
+    /** Risk exactly as the backend computed it, keyed by area id (empty when using direct sources). */
+    @Volatile private var serverRisk: Map<String, RiskIndex> = emptyMap()
+    @Volatile private var lastBackendConditionsAt = 0L
+
     // ─────────────────────────────────────────────────────────
     // Catalog → monitored areas
     // ─────────────────────────────────────────────────────────
@@ -95,6 +110,12 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
         val cached = withContext(Dispatchers.IO) { readCache() }
         if (!force && cached != null && System.currentTimeMillis() - cached.fetchedAtMillis < CATALOG_TTL_MS) {
             _catalog.value = DataResult.Available(snapshot(cached, fromCache = true))
+            return@withLock
+        }
+
+        backendCatalog()?.let { record ->
+            withContext(Dispatchers.IO) { writeCache(record) }
+            _catalog.value = DataResult.Available(snapshot(record, fromCache = false))
             return@withLock
         }
 
@@ -132,8 +153,14 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
 
     override suspend fun refreshConditions(force: Boolean) = conditionsMutex.withLock {
         val snapshot = (_catalog.value as? DataResult.Available)?.value ?: return@withLock
+        if (!force && System.currentTimeMillis() - lastBackendConditionsAt < BACKEND_CONDITIONS_TTL_MS) return@withLock
+        if (backendConditions(snapshot.hotspots)) {
+            lastBackendConditionsAt = System.currentTimeMillis()
+            return@withLock
+        }
+
         val last = _conditionsUpdatedAt.value
-        if (!force && last != null && System.currentTimeMillis() - last < CONDITIONS_TTL_MS) return@withLock
+        if (!force && serverRisk.isEmpty() && last != null && System.currentTimeMillis() - last < CONDITIONS_TTL_MS) return@withLock
 
         val hotspots = snapshot.hotspots
         val rainfall = try {
@@ -164,6 +191,7 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
             }
         }
 
+        serverRisk = emptyMap()
         _conditions.value = hotspots.mapIndexed { i, h ->
             h.id to HotspotConditions(rainfall = rainfall?.getOrNull(i), terrain = terrainCache[h.id])
         }.toMap()
@@ -171,7 +199,98 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
     }
 
     override fun hotspotRisk(hotspot: LandslideHotspot, conditions: HotspotConditions?): RiskIndex =
-        RegionalAnalytics.hotspotRisk(hotspot, conditions, riskEngine::categorizeScore)
+        serverRisk[hotspot.id] ?: RegionalAnalytics.hotspotRisk(hotspot, conditions, riskEngine::categorizeScore)
+
+    // ─────────────────────────────────────────────────────────
+    // Backend (single source of truth)
+    // ─────────────────────────────────────────────────────────
+
+    private suspend fun backendCatalog(): CacheRecord? = try {
+        val response = api.getMonitoringCatalog()
+        val events = response.events.orEmpty().filter { it.id.isNotBlank() && it.state.isNotBlank() }
+        if (events.isEmpty()) null
+        else CacheRecord(events, response.sourceUrl ?: "LandGuard backend", response.fetchedAtMillis ?: System.currentTimeMillis())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(tag, "Backend catalog unavailable, using public source: ${e.message}")
+        null
+    }
+
+    /** @return true when the backend supplied conditions and risk for (almost) every area. */
+    private suspend fun backendConditions(hotspots: List<LandslideHotspot>): Boolean {
+        val response = try {
+            api.getMonitoringZones()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(tag, "Backend conditions unavailable, using public sources: ${e.message}")
+            return false
+        }
+        val byId: Map<String, MonitoringZoneDto> = response.zones.orEmpty().mapNotNull { z -> z.id?.let { it to z } }.toMap()
+        val matched = hotspots.count { it.id in byId }
+        if (hotspots.isEmpty() || matched < hotspots.size * 0.9) {
+            Log.w(tag, "Backend areas do not match the local catalog ($matched/${hotspots.size}); using public sources")
+            return false
+        }
+        serverRisk = byId.mapNotNull { (id, z) ->
+            val risk = z.risk ?: return@mapNotNull null
+            val score = risk.score ?: return@mapNotNull null
+            id to RiskIndex(
+                score = score,
+                severity = riskEngine.categorizeScore(score),
+                factors = risk.factors.orEmpty().map { RiskFactorScore(it.name.orEmpty(), it.score ?: 0, it.weight ?: 0.0, it.detail.orEmpty()) },
+                coverage = risk.coverage ?: 0.0
+            )
+        }.toMap()
+        _conditions.value = hotspots.associate { h ->
+            val z = byId[h.id]
+            h.id to HotspotConditions(rainfall = z?.rainfall, terrain = z?.terrain ?: terrainCache[h.id])
+        }
+        _conditionsUpdatedAt.value = AlertContract.parseIso(response.conditions?.observedAt)
+        Log.i(tag, "Conditions and risk for $matched areas from the LandGuard backend")
+        return true
+    }
+
+    private fun backendAnalysis(json: JsonObject, lat: Double, lng: Double): LocationAnalysis {
+        fun <T> component(name: String, type: Class<T>): DataResult<T> = runCatching {
+            val o = json.getAsJsonObject(name) ?: return@runCatching DataResult.Unavailable("$name data unavailable")
+            if (o.get("available")?.asBoolean == true) DataResult.Available(gson.fromJson(o.getAsJsonObject("value"), type))
+            else DataResult.Unavailable(o.get("reason")?.asString ?: "$name data unavailable")
+        }.getOrElse { DataResult.Unavailable("$name data could not be read") }
+
+        val risk: DataResult<RiskIndex> = runCatching {
+            val o = json.getAsJsonObject("risk")
+            if (o?.get("available")?.asBoolean == true) {
+                val v = o.getAsJsonObject("value")
+                val score = v.get("score").asInt
+                DataResult.Available(
+                    RiskIndex(
+                        score = score,
+                        severity = riskEngine.categorizeScore(score),
+                        factors = v.getAsJsonArray("factors").map { f ->
+                            val fo = f.asJsonObject
+                            RiskFactorScore(fo.get("name").asString, fo.get("score").asInt, fo.get("weight").asDouble, fo.get("detail").asString)
+                        },
+                        coverage = v.get("coverage").asDouble
+                    )
+                )
+            } else DataResult.Unavailable(o?.get("reason")?.asString ?: "Not enough real data to compute a risk index here")
+        }.getOrElse { DataResult.Unavailable("Risk index could not be read") }
+
+        return LocationAnalysis(
+            latitude = lat,
+            longitude = lng,
+            analysedAtMillis = json.get("analysedAtMillis")?.asLong ?: System.currentTimeMillis(),
+            optical = component("optical", OpticalReading::class.java),
+            sar = component("sar", SarReading::class.java),
+            alos4 = DataResult.Unavailable(json.getAsJsonObject("alos4")?.get("reason")?.asString ?: ALOS4_UNAVAILABLE),
+            rainfall = component("rainfall", RainfallReading::class.java),
+            terrain = component("terrain", TerrainReading::class.java),
+            history = component("history", HistoryReading::class.java),
+            risk = risk
+        )
+    }
 
     // ─────────────────────────────────────────────────────────
     // On-demand analysis of a location
@@ -184,6 +303,19 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
             if (!force && cached != null && System.currentTimeMillis() - cached.analysedAtMillis < ANALYSIS_TTL_MS) {
                 return cached
             }
+        }
+
+        val fromBackend = try {
+            backendAnalysis(api.getLocationAnalysis(lat, lng), lat, lng)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(tag, "Backend analysis unavailable, querying public sources: ${e.message}")
+            null
+        }
+        if (fromBackend != null) {
+            analysisMutex.withLock { analysisCache[key] = fromBackend }
+            return fromBackend
         }
 
         val result = coroutineScope {
@@ -275,6 +407,8 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
         // count each location as a call). The user's own location refreshes every 30 min.
         private const val CONDITIONS_TTL_MS = 2L * 60 * 60 * 1000
         private const val ANALYSIS_TTL_MS = 30L * 60 * 1000
+        // The backend refreshes on its own cadence; re-reading it is cheap.
+        private const val BACKEND_CONDITIONS_TTL_MS = 5L * 60 * 1000
 
         const val ALOS4_UNAVAILABLE =
             "No public ALOS-4 PALSAR-3 data service is available to this app. " +

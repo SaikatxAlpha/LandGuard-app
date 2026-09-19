@@ -15,8 +15,12 @@ android {
         applicationId = "com.example.landguard"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
+
+        // Production LandGuard backend — the same API the authority control center uses.
+        buildConfigField("String", "LANDGUARD_API_BASE_URL", "\"https://api.landguard.online/\"")
+        manifestPlaceholders["usesCleartextTraffic"] = "false"
     }
 
     buildFeatures {
@@ -25,6 +29,8 @@ android {
 
     buildTypes {
         release { isMinifyEnabled = false }
+        // Debug builds may point at a local backend over plain HTTP (More → Server connection).
+        debug { manifestPlaceholders["usesCleartextTraffic"] = "true" }
     }
 
     compileOptions {

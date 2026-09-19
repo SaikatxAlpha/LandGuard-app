@@ -1,9 +1,9 @@
 package com.example.landguard.data.repository
 
+import com.example.landguard.data.alerts.AlertSyncManager
+import com.example.landguard.data.alerts.ReceiptSender
 import com.example.landguard.data.local.AlertDao
 import com.example.landguard.data.local.AlertEntity
-import com.example.landguard.data.network.LandGuardApiService
-import com.example.landguard.data.network.StatusUpdateRequest
 import com.example.landguard.domain.model.Alert
 import com.example.landguard.domain.model.AlertStatus
 import com.example.landguard.domain.model.Severity
@@ -14,6 +14,7 @@ import javax.inject.Singleton
 
 interface AlertRepository {
 
+    /** Fetches alerts missed while offline from the backend (same data as the authority console). */
     suspend fun refreshActiveAlerts(): Result<List<Alert>>
 
     fun observeHistory(): Flow<List<Alert>>
@@ -22,6 +23,7 @@ interface AlertRepository {
 
     suspend fun saveAlert(alert: Alert)
 
+    /** The user's own handling; acknowledgements are confirmed back to the authority. */
     suspend fun updateAlertStatus(
         alertId: String,
         newStatus: AlertStatus
@@ -30,23 +32,13 @@ interface AlertRepository {
 
 @Singleton
 class AlertRepositoryImpl @Inject constructor(
-    private val apiService: LandGuardApiService,
-    private val alertDao: AlertDao
+    private val alertDao: AlertDao,
+    private val sync: AlertSyncManager,
+    private val receipts: ReceiptSender
 ) : AlertRepository {
 
-    override suspend fun refreshActiveAlerts(): Result<List<Alert>> {
-        return try {
-            val alerts = apiService.getAlerts()
-
-            alertDao.upsertAll(
-                alerts.map { it.toEntity() }
-            )
-
-            Result.success(alerts)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+    override suspend fun refreshActiveAlerts(): Result<List<Alert>> =
+        sync.syncAlerts().map { alertDao.activeWithExpiry().map { it.toDomain() } }
 
     override fun observeHistory(): Flow<List<Alert>> {
         return alertDao.observeAll().map { entities ->
@@ -66,28 +58,12 @@ class AlertRepositoryImpl @Inject constructor(
         alertId: String,
         newStatus: AlertStatus
     ): Result<Unit> {
-        return try {
-
-            apiService.updateAlertStatus(
-                alertId,
-                StatusUpdateRequest(newStatus.name)
-            )
-
-            val existing = alertDao.getById(alertId)
-
-            if (existing != null) {
-                alertDao.upsert(
-                    existing.copy(
-                        status = newStatus.name
-                    )
-                )
-            }
-
-            Result.success(Unit)
-
-        } catch (e: Exception) {
-            Result.failure(e)
+        val existing = alertDao.getById(alertId) ?: return Result.failure(NoSuchElementException(alertId))
+        alertDao.updateStatus(alertId, newStatus.name)
+        if (newStatus == AlertStatus.ACKNOWLEDGED && !existing.isDemoData) {
+            receipts.send(alertId, "acknowledged", existing.receivedVia.ifBlank { "fcm" }, existing.hopCount)
         }
+        return Result.success(Unit)
     }
 }
 
@@ -103,7 +79,15 @@ private fun Alert.toEntity() = AlertEntity(
     status = status.name,
     confidencePercentage = confidencePercentage,
     sourceProvider = sourceProvider,
-    isDemoData = isDemoData
+    isDemoData = isDemoData,
+    expiresAt = expiresAt,
+    serverStatus = serverStatus,
+    source = source,
+    origin = origin,
+    hopCount = hopCount,
+    receivedVia = receivedVia,
+    latitude = latitude,
+    longitude = longitude
 )
 
 private fun AlertEntity.toDomain() = Alert(
@@ -122,5 +106,13 @@ private fun AlertEntity.toDomain() = Alert(
     }.getOrDefault(AlertStatus.NEW),
     confidencePercentage = confidencePercentage,
     sourceProvider = sourceProvider,
-    isDemoData = isDemoData
+    isDemoData = isDemoData,
+    expiresAt = expiresAt,
+    serverStatus = serverStatus,
+    source = source,
+    origin = origin,
+    hopCount = hopCount,
+    receivedVia = receivedVia,
+    latitude = latitude,
+    longitude = longitude
 )

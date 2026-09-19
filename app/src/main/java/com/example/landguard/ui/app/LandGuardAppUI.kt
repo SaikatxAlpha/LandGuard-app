@@ -162,9 +162,10 @@ private val LandGuardTab.isMapFirst: Boolean
 
 @Composable
 fun BackendSetupScreen(
+    initialUrl: String = "",
     onUrlSaved: (String) -> Unit
 ) {
-    var url by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf(initialUrl) }
     var showError by remember { mutableStateOf(false) }
 
     Box(
@@ -206,7 +207,7 @@ fun BackendSetupScreen(
             Spacer(Modifier.height(10.dp))
 
             Text(
-                text = "Enter the base URL of the LandGuard backend you use. You can change it later from More → Server connection.",
+                text = "Developer builds only. Production builds always use https://api.landguard.online/.",
                 color = com.example.landguard.ui.brand.BrandColors.MistMuted,
                 fontSize = 15.sp,
                 lineHeight = 21.sp
@@ -279,7 +280,7 @@ fun BackendSetupScreen(
 fun LandGuardAppUI(
     notificationAlertId: String?,
     canPromptForLocation: Boolean,
-    onChangeBackendRequest: () -> Unit
+    onChangeBackendRequest: (() -> Unit)?
 ) {
     var selectedTab by rememberSaveable {
         mutableStateOf(
@@ -928,7 +929,7 @@ private fun MoreTabScreen(
     onLocationRequest: () -> Unit,
     onOpenParcels: () -> Unit,
     onOpenSatellite: () -> Unit,
-    onChangeBackendRequest: () -> Unit
+    onChangeBackendRequest: (() -> Unit)?
 ) {
     Column(
         modifier = Modifier
@@ -1026,12 +1027,14 @@ private fun MoreTabScreen(
             },
             onClick = onLocationRequest
         )
-        MoreRow(
-            icon = Icons.Filled.Cloud,
-            title = "Server connection",
-            subtitle = "Change the LandGuard backend URL",
-            onClick = onChangeBackendRequest
-        )
+        if (onChangeBackendRequest != null) {
+            MoreRow(
+                icon = Icons.Filled.Cloud,
+                title = "Server connection",
+                subtitle = "Developer build · change the LandGuard backend URL",
+                onClick = onChangeBackendRequest
+            )
+        }
     }
 }
 
@@ -1271,10 +1274,23 @@ private fun AlertDetailBottomSheet(
             ) {
                 AlertDetailRow("Location", alert.affectedLocation.ifBlank { "Unknown" })
                 AlertDetailRow("Detected event", alert.detectedEvent.ifBlank { "Land change detected" })
-                AlertDetailRow("Confidence", "${alert.confidencePercentage}%")
+                if (alert.isDemoData) AlertDetailRow("Confidence", "${alert.confidencePercentage}%")
                 AlertDetailRow("Status", alert.status.name.lowercase().replaceFirstChar { it.uppercase() })
+                if (alert.serverStatus != "active") AlertDetailRow("Authority status", alert.serverStatus.replaceFirstChar { it.uppercase() })
                 AlertDetailRow("Source", alert.sourceProvider)
-                if (alert.timestamp.isNotBlank()) AlertDetailRow("Detected", alert.timestamp)
+                if (alert.timestamp.isNotBlank()) AlertDetailRow("Issued", formatAlertTime(alert.timestamp))
+                alert.expiresAt?.let { AlertDetailRow("Valid until", formatAlertTime(it)) }
+                if (alert.receivedVia.isNotBlank()) {
+                    AlertDetailRow(
+                        "Received via",
+                        when (alert.receivedVia) {
+                            "mesh" -> "Offline mesh · ${alert.hopCount} hop${if (alert.hopCount == 1) "" else "s"}"
+                            "sync" -> "Sync after reconnect"
+                            else -> "Push notification"
+                        }
+                    )
+                }
+                if (!alert.isDemoData) AlertDetailRow("Alert ID", alert.id)
             }
 
             if (alert.status == AlertStatus.NEW) {
@@ -1317,4 +1333,10 @@ private fun AlertDetailRow(
             modifier = Modifier.weight(1f)
         )
     }
+}
+
+/** ISO-8601 UTC → local "d MMM yyyy, HH:mm"; other formats are shown as-is. */
+private fun formatAlertTime(value: String): String {
+    val millis = com.example.landguard.data.alerts.AlertContract.parseIso(value) ?: return value
+    return java.text.SimpleDateFormat("d MMM yyyy, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(millis))
 }
