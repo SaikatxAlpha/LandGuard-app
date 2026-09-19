@@ -1,15 +1,12 @@
 package com.example.landguard.offline
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
+import android.Manifest
 import android.content.Context
-import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import androidx.core.app.NotificationCompat
-import com.example.landguard.MainActivity
-import com.example.landguard.R
+import androidx.core.content.ContextCompat
+import com.example.landguard.data.alerts.AlertContract
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.AdvertisingOptions
 import com.google.android.gms.nearby.connection.ConnectionInfo
@@ -23,14 +20,25 @@ import com.google.android.gms.nearby.connection.Payload
 import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Singleton
-import dagger.hilt.android.qualifiers.ApplicationContext
 
+/** A canonical alert received from a nearby device. */
+data class MeshAlert(val fromEndpointId: String, val alert: OfflineAlert)
+
+/**
+ * Nearby Connections transport for the offline disaster channel. It only
+ * moves canonical alerts between phones; storage, de-duplication, expiry,
+ * notifications and onward relaying are handled by AlertIngestor.
+ */
 @Singleton
 class NearbyMeshManager @Inject constructor(@ApplicationContext private val context: Context) {
 
@@ -41,47 +49,42 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
 
     private val _connectedEndpoints = MutableStateFlow<Set<String>>(emptySet())
     val connectedEndpoints: StateFlow<Set<String>> = _connectedEndpoints.asStateFlow()
-    
+
     private val _isAdvertising = MutableStateFlow(false)
     val isAdvertising: StateFlow<Boolean> = _isAdvertising.asStateFlow()
 
     private val _isDiscovering = MutableStateFlow(false)
     val isDiscovering: StateFlow<Boolean> = _isDiscovering.asStateFlow()
 
+    private val _incomingAlerts = MutableSharedFlow<MeshAlert>(extraBufferCapacity = 64)
+    /** Alerts received from nearby devices (not yet de-duplicated). */
+    val incomingAlerts: SharedFlow<MeshAlert> = _incomingAlerts.asSharedFlow()
+
+    private val _peerConnected = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    /** Emits an endpoint id whenever a new peer connects (store-and-forward trigger). */
+    val peerConnected: SharedFlow<String> = _peerConnected.asSharedFlow()
+
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-            Log.i(TAG, "Endpoint discovered")
-            Log.i(TAG, "Connection initiated")
-            
+            Log.i(TAG, "Endpoint discovered: $endpointId")
             try {
-                connectionsClient.requestConnection(
-                    android.os.Build.MODEL,
-                    endpointId,
-                    connectionLifecycleCallback
-                ).addOnSuccessListener {
-                    // Connection request sent
-                }.addOnFailureListener { e ->
-                    Log.e(TAG, "Failed to request connection to $endpointId", e)
-                }
+                connectionsClient.requestConnection(Build.MODEL, endpointId, connectionLifecycleCallback)
+                    .addOnFailureListener { e -> Log.w(TAG, "Connection request to $endpointId failed: ${e.message}") }
             } catch (e: Exception) {
                 Log.e(TAG, "Exception requesting connection", e)
             }
         }
 
         override fun onEndpointLost(endpointId: String) {
-            Log.i(TAG, "Discovery: Endpoint lost: $endpointId")
+            Log.i(TAG, "Endpoint lost: $endpointId")
         }
     }
 
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
-            Log.i(TAG, "Connection initiated")
-            // Accept the connection automatically for this Phase A test
             try {
                 connectionsClient.acceptConnection(endpointId, payloadCallback)
-                    .addOnFailureListener { e ->
-                        Log.e(TAG, "Failed to accept connection from $endpointId", e)
-                    }
+                    .addOnFailureListener { e -> Log.e(TAG, "Failed to accept connection from $endpointId", e) }
             } catch (e: Exception) {
                 Log.e(TAG, "Exception accepting connection", e)
             }
@@ -89,98 +92,77 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
             if (result.status.isSuccess) {
-                Log.i(TAG, "Connection established")
+                Log.i(TAG, "Connection established with $endpointId")
                 _connectedEndpoints.value = _connectedEndpoints.value + endpointId
+                _peerConnected.tryEmit(endpointId)
             } else {
                 Log.w(TAG, "Connection failed with $endpointId: ${result.status.statusCode}")
             }
         }
 
         override fun onDisconnected(endpointId: String) {
-            Log.i(TAG, "Connection disconnected")
+            Log.i(TAG, "Connection disconnected: $endpointId")
             _connectedEndpoints.value = _connectedEndpoints.value - endpointId
         }
     }
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            if (payload.type == Payload.Type.BYTES) {
-                payload.asBytes()?.let { bytes ->
-                    val message = String(bytes, StandardCharsets.UTF_8)
-                    Log.i(TAG, "Message received")
-                    
-                    val offlineAlert = OfflineAlert.fromJson(message)
-                    if (offlineAlert != null) {
-                        Log.i(TAG, "Offline alert received without Internet")
-                        showOfflineNotification(offlineAlert)
-                    } else if (message == "HELLO LANDGUARD") {
-                        Log.i(TAG, "Received HELLO LANDGUARD")
-                    }
-                }
+            if (payload.type != Payload.Type.BYTES) return
+            val message = payload.asBytes()?.toString(StandardCharsets.UTF_8) ?: return
+            if (message == "HELLO LANDGUARD") {
+                Log.i(TAG, "Received HELLO LANDGUARD from $endpointId")
+                return
             }
+            val alert = AlertContract.fromMeshJson(message)
+            if (alert == null) {
+                Log.w(TAG, "Ignoring unrecognised mesh payload from $endpointId")
+                return
+            }
+            Log.i(TAG, "Offline alert ${alert.alertId} received from $endpointId (hop ${alert.hopCount})")
+            _incomingAlerts.tryEmit(MeshAlert(endpointId, alert))
         }
 
-        override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // Optional: Handle transfer progress
-        }
+        override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) = Unit
     }
 
-    private fun showOfflineNotification(alert: OfflineAlert) {
-        val channelId = "landguard_offline_alerts"
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "LandGuard Offline Alerts",
-                NotificationManager.IMPORTANCE_HIGH
-            )
-            notificationManager.createNotificationChannel(channel)
+    /** Runtime permissions Nearby Connections needs on this Android version. */
+    fun requiredPermissions(): List<String> = buildList {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            add(Manifest.permission.BLUETOOTH_CONNECT)
+            add(Manifest.permission.BLUETOOTH_SCAN)
+        } else {
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.NEARBY_WIFI_DEVICES)
+    }
 
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            putExtra("alertId", alert.alertId)
-            putExtra("zoneId", alert.zoneId)
-            putExtra("zoneName", alert.zoneName)
-            putExtra("level", alert.level)
+    fun missingPermissions(): List<String> = requiredPermissions().filter {
+        ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+    }
+
+    /** Starts advertising + discovery once the permissions are granted; safe to call repeatedly. */
+    fun startIfPermitted(): Boolean {
+        if (missingPermissions().isNotEmpty()) {
+            Log.i(TAG, "Offline mesh waiting for permissions: ${missingPermissions()}")
+            return false
         }
-
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            alert.alertId.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("\uD83D\uDD34 ${alert.level} — ${alert.zoneName}")
-            .setContentText(alert.message)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .build()
-
-        notificationManager.notify(alert.alertId.hashCode(), notification)
+        startAdvertising()
+        startDiscovery()
+        return true
     }
 
     fun startAdvertising() {
         if (_isAdvertising.value) return
-        
         try {
             val options = AdvertisingOptions.Builder().setStrategy(STRATEGY).build()
-            connectionsClient.startAdvertising(
-                android.os.Build.MODEL, // Use device model as name
-                SERVICE_ID,
-                connectionLifecycleCallback,
-                options
-            ).addOnSuccessListener {
-                Log.i(TAG, "Advertising started")
-                _isAdvertising.value = true
-            }.addOnFailureListener { e ->
-                Log.e(TAG, "Failed to start advertising", e)
-            }
+            connectionsClient.startAdvertising(Build.MODEL, SERVICE_ID, connectionLifecycleCallback, options)
+                .addOnSuccessListener {
+                    Log.i(TAG, "Advertising started")
+                    _isAdvertising.value = true
+                }
+                .addOnFailureListener { e -> Log.e(TAG, "Failed to start advertising", e) }
         } catch (e: Exception) {
             Log.e(TAG, "Exception starting advertising", e)
         }
@@ -189,7 +171,6 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
     fun stopAdvertising() {
         try {
             connectionsClient.stopAdvertising()
-            Log.i(TAG, "Advertising stopped")
             _isAdvertising.value = false
         } catch (e: Exception) {
             Log.e(TAG, "Exception stopping advertising", e)
@@ -198,19 +179,14 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
 
     fun startDiscovery() {
         if (_isDiscovering.value) return
-        
         try {
             val options = DiscoveryOptions.Builder().setStrategy(STRATEGY).build()
-            connectionsClient.startDiscovery(
-                SERVICE_ID,
-                endpointDiscoveryCallback,
-                options
-            ).addOnSuccessListener {
-                Log.i(TAG, "Discovery started")
-                _isDiscovering.value = true
-            }.addOnFailureListener { e ->
-                Log.e(TAG, "Failed to start discovery", e)
-            }
+            connectionsClient.startDiscovery(SERVICE_ID, endpointDiscoveryCallback, options)
+                .addOnSuccessListener {
+                    Log.i(TAG, "Discovery started")
+                    _isDiscovering.value = true
+                }
+                .addOnFailureListener { e -> Log.e(TAG, "Failed to start discovery", e) }
         } catch (e: Exception) {
             Log.e(TAG, "Exception starting discovery", e)
         }
@@ -219,61 +195,45 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
     fun stopDiscovery() {
         try {
             connectionsClient.stopDiscovery()
-            Log.i(TAG, "Discovery stopped")
             _isDiscovering.value = false
         } catch (e: Exception) {
             Log.e(TAG, "Exception stopping discovery", e)
         }
     }
-    
+
     fun sendTestMessage() {
-        val testMessage = "HELLO LANDGUARD"
-        val payload = Payload.fromBytes(testMessage.toByteArray(StandardCharsets.UTF_8))
-        
-        val currentEndpoints = _connectedEndpoints.value
-        if (currentEndpoints.isNotEmpty()) {
-            try {
-                connectionsClient.sendPayload(currentEndpoints.toList(), payload)
-                    .addOnSuccessListener {
-                        Log.i(TAG, "Message sent")
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e(TAG, "Failed to send message", e)
-                    }
-            } catch (e: Exception) {
-                Log.e(TAG, "Exception sending message", e)
-            }
-        } else {
-            Log.w(TAG, "Cannot send message, no endpoints connected")
-        }
+        send(_connectedEndpoints.value.toList(), "HELLO LANDGUARD")
     }
 
-    fun sendOfflineAlert(alert: OfflineAlert) {
-        val json = alert.toJson()
-        val payload = Payload.fromBytes(json.toByteArray(StandardCharsets.UTF_8))
-        
-        val currentEndpoints = _connectedEndpoints.value
-        if (currentEndpoints.isNotEmpty()) {
-            try {
-                connectionsClient.sendPayload(currentEndpoints.toList(), payload)
-                    .addOnSuccessListener {
-                        Log.i(TAG, "Offline alert sent to ${currentEndpoints.size} endpoints")
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e(TAG, "Failed to send offline alert", e)
-                    }
-            } catch (e: Exception) {
-                Log.e(TAG, "Exception sending offline alert", e)
-            }
-        } else {
-            Log.w(TAG, "Cannot send offline alert, no endpoints connected")
+    /** Sends a canonical alert to every connected peer except [excludeEndpointId]. */
+    fun relay(alert: OfflineAlert, excludeEndpointId: String? = null): Int {
+        val targets = _connectedEndpoints.value.filter { it != excludeEndpointId }
+        if (targets.isEmpty()) {
+            Log.i(TAG, "No nearby peers for alert ${alert.alertId}")
+            return 0
+        }
+        send(targets, AlertContract.toMeshJson(alert))
+        Log.i(TAG, "Alert ${alert.alertId} relayed to ${targets.size} peer(s) at hop ${alert.hopCount}")
+        return targets.size
+    }
+
+    fun sendTo(endpointId: String, alert: OfflineAlert) {
+        send(listOf(endpointId), AlertContract.toMeshJson(alert))
+    }
+
+    private fun send(endpoints: List<String>, text: String) {
+        if (endpoints.isEmpty()) return
+        try {
+            connectionsClient.sendPayload(endpoints, Payload.fromBytes(text.toByteArray(StandardCharsets.UTF_8)))
+                .addOnFailureListener { e -> Log.e(TAG, "Failed to send mesh payload", e) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception sending mesh payload", e)
         }
     }
 
     fun stopAll() {
         try {
             connectionsClient.stopAllEndpoints()
-            Log.i(TAG, "All endpoints disconnected")
             _connectedEndpoints.value = emptySet()
             stopAdvertising()
             stopDiscovery()

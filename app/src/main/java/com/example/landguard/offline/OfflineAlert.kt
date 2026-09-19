@@ -1,29 +1,10 @@
 package com.example.landguard.offline
 
-import com.google.gson.Gson
+import com.example.landguard.data.alerts.AlertDto
 
-data class OfflineAlert(
-    val alertId: String,
-    val zoneId: String,
-    val zoneName: String,
-    val level: String,
-    val message: String,
-    val timestamp: String,
-    val expiresAt: Long,
-    val originDeviceId: String,
-    val hopCount: Int
-) {
-    fun toJson(): String {
-        return Gson().toJson(this)
-    }
-
-    companion object {
-        fun fromJson(json: String): OfflineAlert? {
-            return try {
-                Gson().fromJson(json, OfflineAlert::class.java)
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
-}
+/**
+ * The offline mesh carries the canonical LandGuard alert unchanged (same
+ * alertId, expiry and status as the backend); only hopCount grows per relay.
+ * Encoding/decoding lives in [com.example.landguard.data.alerts.AlertContract].
+ */
+typealias OfflineAlert = AlertDto

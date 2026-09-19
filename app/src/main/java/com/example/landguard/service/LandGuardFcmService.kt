@@ -1,236 +1,70 @@
 package com.example.landguard.service
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.util.Log
-import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
-import com.example.landguard.MainActivity
-import com.example.landguard.data.network.DeviceRegisterRequest
-import com.example.landguard.data.network.LandGuardApiService
-import com.example.landguard.data.repository.AlertRepository
-import com.example.landguard.domain.model.Alert
-import com.example.landguard.domain.model.Severity
-import com.google.firebase.messaging.FirebaseMessaging
+import com.example.landguard.data.alerts.AlertChannel
+import com.example.landguard.data.alerts.AlertContract
+import com.example.landguard.data.alerts.AlertIngestor
+import com.example.landguard.data.alerts.AlertSyncManager
+import com.example.landguard.domain.service.FcmTokenManager
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
+/**
+ * The online alert channel. The backend sends data-only, high-priority FCM
+ * messages, so this handler runs in the foreground AND background and every
+ * alert goes through the same AlertIngestor as sync and the offline mesh.
+ */
 @AndroidEntryPoint
 class LandGuardFcmService : FirebaseMessagingService() {
 
-    @Inject
-    lateinit var apiService: LandGuardApiService
+    @Inject lateinit var ingestor: AlertIngestor
+    @Inject lateinit var sync: AlertSyncManager
+    @Inject lateinit var tokens: FcmTokenManager
 
-    @Inject
-    lateinit var alertRepository: AlertRepository
-
-    @Inject
-    lateinit var meshManager: com.example.landguard.offline.NearbyMeshManager
-
-    override fun onCreate() {
-        super.onCreate()
-        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                task.result?.let { token ->
-                    if (token.isNotBlank()) {
-                        registerToken(token)
-                    }
-                }
-            } else {
-                task.exception?.printStackTrace()
-            }
-        }
-    }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        registerToken(token)
-    }
-
-    private fun registerToken(token: String) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val sharedPrefs = getSharedPreferences("LandGuardNetworkPrefs", Context.MODE_PRIVATE)
-                val baseUrl = sharedPrefs.getString("base_url", "UNKNOWN")
-                
-                Log.d("LandGuardFCM", "FCM token obtained")
-                Log.d("LandGuardBackend", "POST /devices")
-                Log.d("LandGuardBackend", "Configured URL: $baseUrl")
-                
-                val response = apiService.registerDevice(DeviceRegisterRequest(token, platform = "android"))
-                
-                Log.d("LandGuardBackend", "HTTP status = ${response.code()}")
-                val bodyString = if (response.isSuccessful) {
-                    response.body()?.string() ?: "empty"
-                } else {
-                    response.errorBody()?.string() ?: "empty error"
-                }
-                Log.d("LandGuardBackend", "response = $bodyString")
-                
-                if (response.isSuccessful) {
-                    Log.d("LandGuardBackend", "FCM device registration SUCCESS")
-                } else {
-                    Log.d("LandGuardBackend", "FCM device registration FAILED")
-                }
-            } catch (e: Exception) {
-                Log.e("LandGuardBackend", "FCM device registration FAILED: ${e.message}", e)
-            }
-        }
+        scope.launch { tokens.registerToken(token) }
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
-
-        Log.i("LandGuardFCM", "MESSAGE RECEIVED")
-
         val data = remoteMessage.data
+        Log.i(TAG, "FCM message received: type=${data["type"] ?: "alert"} alertId=${data["alertId"]}")
 
-        // 5. Read these FCM data fields: alertId, zoneId, zoneName, level, deepLink
-        val alertId = data["alertId"] ?: "alert_${System.currentTimeMillis()}"
-        val zoneId = data["zoneId"] ?: "unknown_zone"
-        val zoneName = data["zoneName"] ?: "Unknown Zone"
-        val level = data["level"] ?: "NORMAL"
-        val deepLink = data["deepLink"]
-
-        Log.i("LandGuardFCM", "alertId=$alertId")
-        Log.i("LandGuardFCM", "zoneId=$zoneId")
-        Log.i("LandGuardFCM", "level=$level")
-
-        val title = remoteMessage.notification?.title 
-            ?: data["title"] 
-            ?: "$level Alert: $zoneName"
-            
-        val body = remoteMessage.notification?.body 
-            ?: data["body"] 
-            ?: "A $level alert was reported."
-
-        val severity = runCatching { Severity.valueOf(level.uppercase()) }
-            .getOrDefault(if (level.equals("CRITICAL", true)) Severity.CRITICAL else Severity.MODERATE)
-
-        val alert = Alert(
-            id = alertId,
-            title = title,
-            description = body,
-            severity = severity,
-            affectedLocation = zoneName,
-            parcelId = zoneId,
-            isDemoData = false
-        )
-
-        CoroutineScope(Dispatchers.IO).launch {
-            alertRepository.saveAlert(alert)
-        }
-
-        try {
-            Log.i("LandGuardFCM", "Offline relay attempted")
-            val currentEndpoints = meshManager.connectedEndpoints.value
-            if (currentEndpoints.isNotEmpty()) {
-                val offlineAlert = com.example.landguard.offline.OfflineAlert(
-                    alertId = alertId,
-                    zoneId = zoneId,
-                    zoneName = zoneName,
-                    level = level,
-                    message = body,
-                    timestamp = System.currentTimeMillis().toString(),
-                    expiresAt = System.currentTimeMillis() + 86400000,
-                    originDeviceId = Build.MODEL,
-                    hopCount = 0
-                )
-                meshManager.sendOfflineAlert(offlineAlert)
-                Log.i("LandGuardMesh", "Offline alert forwarded")
-            } else {
-                Log.i("LandGuardFCM", "Offline relay skipped \u2014 no nearby peers")
+        when (data["type"] ?: "alert") {
+            "alert" -> {
+                val alert = AlertContract.fromFcmData(data)
+                if (alert == null) {
+                    Log.w(TAG, "Ignoring FCM message that is not a valid LandGuard alert")
+                    return
+                }
+                // Persist before returning: the process may be stopped right after this callback.
+                runBlocking {
+                    withTimeoutOrNull(8_000) { ingestor.ingest(alert, AlertChannel.FCM) }
+                        ?: Log.w(TAG, "Timed out storing alert ${alert.alertId}; it will arrive again on the next sync")
+                }
             }
-        } catch (e: Exception) {
-            Log.e("LandGuardFCM", "Error during offline relay", e)
+            "alert_status" -> {
+                val alertId = data["alertId"] ?: return
+                val status = data["status"] ?: return
+                runBlocking { withTimeoutOrNull(5_000) { ingestor.applyStatus(alertId, status) } }
+            }
+            "sync" -> sync.onSyncHint(data["scope"])
+            else -> Log.w(TAG, "Unknown FCM message type ${data["type"]}")
         }
-
-        showNotification(
-            title = title,
-            body = body,
-            alertId = alertId,
-            level = level,
-            zoneId = zoneId,
-            zoneName = zoneName,
-            deepLink = deepLink
-        )
     }
 
-    private fun showNotification(
-        title: String,
-        body: String,
-        alertId: String,
-        level: String,
-        zoneId: String,
-        zoneName: String,
-        deepLink: String?
-    ) {
-        // 10. Handle notification permission correctly for Android 13+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                Log.w("LandGuardFCM", "POST_NOTIFICATIONS permission not granted. Cannot show notification.")
-                return
-            }
-        }
-
-        // 7. Create/use notification channel: landguard_alerts
-        val channelId = "landguard_alerts"
-        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-
-        // 8. Critical alerts should use high notification priority.
-        // 9. Normal alerts should use default/normal priority.
-        val isCritical = level.equals("CRITICAL", ignoreCase = true) || level.equals("HIGH", ignoreCase = true)
-        val priority = if (isCritical) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId, 
-                "LandGuard Alerts", 
-                NotificationManager.IMPORTANCE_HIGH
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            putExtra("alertId", alertId)
-            putExtra("zoneId", zoneId)
-            putExtra("zoneName", zoneName)
-            putExtra("level", level)
-            if (deepLink != null) {
-                putExtra("deepLink", deepLink)
-            }
-        }
-
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            alertId.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // 6. Display a native Android notification when an FCM alert arrives.
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(com.example.landguard.R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setAutoCancel(true)
-            .setPriority(priority)
-            .setContentIntent(pendingIntent)
-            .build()
-
-        notificationManager.notify(alertId.hashCode(), notification)
-        Log.i("LandGuardFCM", "notification created")
-        Log.i("LandGuardFCM", "Notification displayed successfully")
+    private companion object {
+        const val TAG = "LandGuardFCM"
     }
 }

@@ -26,7 +26,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="LandGuard"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
         android:theme="@style/Theme.LandGuard">
 
         <activity
@@ -40,7 +40,7 @@
 
         <activity
             android:name=".offline.TestMeshActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="Test Mesh" />
 
         <service

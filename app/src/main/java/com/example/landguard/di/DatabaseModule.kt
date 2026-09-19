@@ -24,7 +24,7 @@ object DatabaseModule {
             context,
             LandGuardDatabase::class.java,
             "landguard.db"
-        ).build()
+        ).addMigrations(LandGuardDatabase.MIGRATION_1_2).build()
     }
 
     @Provides
