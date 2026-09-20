@@ -96,6 +96,10 @@ data class MapFocus(
 @Immutable
 data class MapFitAll(val token: Int)
 
+/** A searched / alert location shown as a dropped pin. */
+@Immutable
+data class MapPin(val latitude: Double, val longitude: Double)
+
 /** The cinematic intro plays once per app session, not on every tab visit. */
 object MapIntro {
     @Volatile
@@ -116,6 +120,7 @@ private const val SOURCE_ZONES = "lg-zones"
 private const val SOURCE_PILLARS = "lg-pillars"
 private const val SOURCE_POINTS = "lg-points"
 private const val SOURCE_USER = "lg-user"
+private const val SOURCE_PIN = "lg-pin"
 
 private const val LAYER_ZONE_FILL = "lg-zone-fill"
 private const val LAYER_ZONE_GLOW = "lg-zone-glow"
@@ -129,6 +134,14 @@ private const val LAYER_NAME = "lg-name"
 private const val LAYER_USER_PULSE = "lg-user-pulse"
 private const val LAYER_USER_HALO = "lg-user-halo"
 private const val LAYER_USER = "lg-user-dot"
+private const val LAYER_PIN_HALO = "lg-pin-halo"
+private const val LAYER_PIN = "lg-pin"
+
+/** Every layer that draws monitored areas (hidden together by the "Risk zones" layer toggle). */
+private val AREA_LAYERS = listOf(
+    LAYER_ZONE_FILL, LAYER_RIPPLE_A, LAYER_RIPPLE_B, LAYER_ZONE_GLOW, LAYER_ZONE_LINE,
+    LAYER_SELECTED, LAYER_PILLAR, LAYER_SCORE, LAYER_NAME
+)
 
 private const val GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf"
 
@@ -214,7 +227,10 @@ fun LandGuardRiskMap(
     bottomInset: Dp = 0.dp,
     threeD: Boolean = true,
     cinematicIntro: Boolean = false,
-    onIntroFinished: () -> Unit = {}
+    onIntroFinished: () -> Unit = {},
+    pin: MapPin? = null,
+    showZones: Boolean = true,
+    onUserClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -223,20 +239,27 @@ fun LandGuardRiskMap(
     val currentAreas by rememberUpdatedState(areas)
     val currentUser by rememberUpdatedState(userLocation)
     val currentThreeD by rememberUpdatedState(threeD)
+    val currentShowZones by rememberUpdatedState(showZones)
     val currentOnAreaClick by rememberUpdatedState(onAreaClick)
     val currentOnBackgroundClick by rememberUpdatedState(onMapBackgroundClick)
+    val currentOnUserClick by rememberUpdatedState(onUserClick)
     val currentOnIntroFinished by rememberUpdatedState(onIntroFinished)
 
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
     var styleGeneration by remember { mutableIntStateOf(0) }
     var hasPlacedCamera by remember { mutableStateOf(false) }
     var hasCenteredOnUser by remember { mutableStateOf(false) }
-    val introPending = cinematicIntro && !MapIntro.played
+    // Decided once per map instance. Re-reading the (non-snapshot) MapIntro flag on every
+    // recomposition used to flip this key while the intro was finishing, which cancelled the
+    // intro coroutine before it could report completion — the details panel then stayed
+    // hidden and area taps appeared dead until the screen was left and re-entered.
+    val introPending = remember { cinematicIntro && !MapIntro.played }
     var introActive by remember { mutableStateOf(introPending) }
     var userTookOver by remember { mutableStateOf(false) }
     val pillarGrowth = remember { Animatable(0f) }
 
     val tapSlopPx = with(density) { 28.dp.toPx() }
+    val userSlopPx = with(density) { 20.dp.toPx() }
 
     val mapView = remember {
         MapLibre.getInstance(context)
@@ -261,7 +284,17 @@ fun LandGuardRiskMap(
                     setAttributionTintColor(android.graphics.Color.parseColor("#6B7280"))
                 }
                 map.addOnMapClickListener { latLng ->
-                    val area = findTappedArea(map, map.projection.toScreenLocation(latLng), currentAreas, tapSlopPx)
+                    val screenPoint = map.projection.toScreenLocation(latLng)
+                    val user = currentUser
+                    val onUser = currentOnUserClick
+                    if (user != null && onUser != null) {
+                        val p = map.projection.toScreenLocation(LatLng(user.latitude, user.longitude))
+                        if (hypot((p.x - screenPoint.x).toDouble(), (p.y - screenPoint.y).toDouble()) <= userSlopPx) {
+                            onUser()
+                            return@addOnMapClickListener true
+                        }
+                    }
+                    val area = if (currentShowZones) findTappedArea(map, screenPoint, currentAreas, tapSlopPx) else null
                     if (area != null) currentOnAreaClick(area) else currentOnBackgroundClick()
                     true
                 }
@@ -331,84 +364,45 @@ fun LandGuardRiskMap(
     }
 
     // ── Data ─────────────────────────────────────────────────────────────
-    LaunchedEffect(areas, selectedAreaId, userLocation, styleGeneration) {
+    LaunchedEffect(areas, selectedAreaId, userLocation, pin, styleGeneration) {
         val style = loadedStyle ?: return@LaunchedEffect
         if (!style.isFullyLoaded) return@LaunchedEffect
         updateAreas(style, areas, selectedAreaId)
         updateUser(style, userLocation)
+        updatePin(style, pin)
+    }
+
+    // ── Layer toggle: risk zones ─────────────────────────────────────────
+    LaunchedEffect(showZones, styleGeneration) {
+        val style = loadedStyle ?: return@LaunchedEffect
+        val visibility = PropertyFactory.visibility(if (showZones) Property.VISIBLE else Property.NONE)
+        AREA_LAYERS.forEach { id -> runCatching { style.getLayer(id)?.setProperties(visibility) } }
     }
 
     // ── Cinematic intro: roll the world, then fly down onto the user ─────
-    LaunchedEffect(introPending) {
+    // Keyed on Unit: runs once per map instance and is never restarted by recomposition.
+    LaunchedEffect(Unit) {
         if (!introPending) return@LaunchedEffect
-        val map = mapView.awaitMap()
-
-        val minRollMs = 2400L
-        val maxWaitMs = 7000L
-        val startLng = (currentUser?.longitude ?: DEFAULT_LNG) - 150.0
-        var startTime = -1L
-        var lastFrame = -1L
-        var lng = startLng
-
-        while (!userTookOver) {
-            val now = withFrameMillis { it }
-            if (startTime < 0) {
-                startTime = now
-                lastFrame = now
-            }
-            val elapsed = now - startTime
-            val dtSec = (now - lastFrame).coerceIn(0L, 100L) / 1000.0
-            lastFrame = now
-            // Ease in to a steady spin, like a globe gaining momentum.
-            val speedDegPerSec = 70.0 * (elapsed / 700.0).coerceAtMost(1.0)
-            lng += speedDegPerSec * dtSec
-            map.moveCamera(
-                CameraUpdateFactory.newCameraPosition(
-                    CameraPosition.Builder()
-                        .target(LatLng(18.0 + 6.0 * sin(elapsed / 1800.0), wrapLng(lng)))
-                        .zoom(1.2)
-                        .tilt(0.0)
-                        .bearing(0.0)
-                        .build()
-                )
+        try {
+            playIntro(
+                map = mapView.awaitMap(),
+                user = { currentUser },
+                areas = { currentAreas },
+                threeD = { currentThreeD },
+                userTookOver = { userTookOver }
             )
-            val located = currentUser != null
-            if (elapsed >= minRollMs && (located || elapsed >= maxWaitMs)) break
+        } finally {
+            // Always end the intro — also when a tap / pan / focus request interrupts it —
+            // so the screen never waits on an intro that will not finish.
+            MapIntro.played = true
+            introActive = false
+            hasPlacedCamera = true
+            // A late GPS fix must not yank the camera away from what the user is looking at.
+            hasCenteredOnUser = hasCenteredOnUser || currentUser != null || userTookOver
+            currentOnIntroFinished()
         }
-
-        if (!userTookOver) {
-            val user = currentUser
-            val target: CameraPosition? = when {
-                user != null -> CameraPosition.Builder()
-                    .target(LatLng(user.latitude, user.longitude))
-                    .zoom(12.2)
-                    .tilt(if (currentThreeD) TILT_3D else 0.0)
-                    .bearing(-18.0)
-                    .build()
-                currentAreas.isNotEmpty() -> {
-                    val c = centroid(currentAreas)
-                    CameraPosition.Builder()
-                        .target(c)
-                        .zoom(9.2)
-                        .tilt(if (currentThreeD) 45.0 else 0.0)
-                        .bearing(-12.0)
-                        .build()
-                }
-                else -> null
-            }
-            if (target != null) {
-                // animateCamera performs a flyTo: zoom out, travel, then dive in.
-                map.awaitCameraAnimation(CameraUpdateFactory.newCameraPosition(target), 4200)
-            }
-        }
-
-        MapIntro.played = true
-        introActive = false
-        hasPlacedCamera = true
-        hasCenteredOnUser = currentUser != null
         pillarGrowth.snapTo(0f)
         pillarGrowth.animateTo(1f, tween(1400, easing = FastOutSlowInEasing))
-        currentOnIntroFinished()
     }
 
     // ── Default camera when there is no intro ────────────────────────────
@@ -453,6 +447,7 @@ fun LandGuardRiskMap(
     LaunchedEffect(focus) {
         val target = focus ?: return@LaunchedEffect
         userTookOver = true
+        hasCenteredOnUser = true
         mapView.getMapAsync { map ->
             map.animateCamera(
                 CameraUpdateFactory.newCameraPosition(
@@ -472,8 +467,9 @@ fun LandGuardRiskMap(
     LaunchedEffect(fitAll) {
         if (fitAll == null) return@LaunchedEffect
         userTookOver = true
+        hasCenteredOnUser = true
         mapView.getMapAsync { map ->
-            fitCamera(map, areas, userLocation, density.run { topInset.roundToPx() }, density.run { bottomInset.roundToPx() }, animate = true)
+            fitCamera(map, currentAreas, currentUser, density.run { topInset.roundToPx() }, density.run { bottomInset.roundToPx() }, animate = true)
             hasPlacedCamera = true
         }
     }
@@ -561,6 +557,77 @@ private suspend fun MapLibreMap.awaitCameraAnimation(
         override fun onFinish() { if (cont.isActive) cont.resume(Unit) }
     })
     cont.invokeOnCancellation { runCatching { cancelTransitions() } }
+}
+
+/**
+ * Cinematic intro: roll the globe until a GPS fix arrives (bounded), then fly
+ * down onto the user — or onto the monitored areas when there is no fix.
+ * Returns early as soon as the user pans / taps a target.
+ */
+private suspend fun playIntro(
+    map: MapLibreMap,
+    user: () -> UserLocation?,
+    areas: () -> List<RiskArea>,
+    threeD: () -> Boolean,
+    userTookOver: () -> Boolean
+) {
+    val minRollMs = 2400L
+    val maxWaitMs = 7000L
+    var lng = (user()?.longitude ?: DEFAULT_LNG) - 150.0
+    var startTime = -1L
+    var lastFrame = -1L
+
+    while (!userTookOver()) {
+        val now = withFrameMillis { it }
+        // Re-check after the frame wait: a tap / focus request issued meanwhile has already
+        // started its own camera animation, which another moveCamera here would cancel.
+        if (userTookOver()) break
+        if (startTime < 0) {
+            startTime = now
+            lastFrame = now
+        }
+        val elapsed = now - startTime
+        val dtSec = (now - lastFrame).coerceIn(0L, 100L) / 1000.0
+        lastFrame = now
+        // Ease in to a steady spin, like a globe gaining momentum.
+        val speedDegPerSec = 70.0 * (elapsed / 700.0).coerceAtMost(1.0)
+        lng += speedDegPerSec * dtSec
+        map.moveCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder()
+                    .target(LatLng(18.0 + 6.0 * sin(elapsed / 1800.0), wrapLng(lng)))
+                    .zoom(1.2)
+                    .tilt(0.0)
+                    .bearing(0.0)
+                    .build()
+            )
+        )
+        if (elapsed >= minRollMs && (user() != null || elapsed >= maxWaitMs)) break
+    }
+    if (userTookOver()) return
+
+    val fix = user()
+    val monitored = areas()
+    val target: CameraPosition = when {
+        fix != null -> CameraPosition.Builder()
+            .target(LatLng(fix.latitude, fix.longitude))
+            .zoom(12.2)
+            .tilt(if (threeD()) TILT_3D else 0.0)
+            .bearing(-18.0)
+            .build()
+        monitored.isNotEmpty() -> CameraPosition.Builder()
+            .target(centroid(monitored))
+            .zoom(9.2)
+            .tilt(if (threeD()) 45.0 else 0.0)
+            .bearing(-12.0)
+            .build()
+        else -> CameraPosition.Builder()
+            .target(LatLng(DEFAULT_LAT, DEFAULT_LNG))
+            .zoom(4.0)
+            .build()
+    }
+    // animateCamera performs a flyTo: zoom out, travel, then dive in.
+    map.awaitCameraAnimation(CameraUpdateFactory.newCameraPosition(target), 4200)
 }
 
 private fun wrapLng(lng: Double): Double {
@@ -658,7 +725,7 @@ private fun applyAppleLook(style: Style) {
 // ─────────────────────────────────────────────────────────────
 
 private fun installLayers(style: Style) {
-    listOf(SOURCE_ZONES, SOURCE_PILLARS, SOURCE_POINTS, SOURCE_USER).forEach { id ->
+    listOf(SOURCE_ZONES, SOURCE_PILLARS, SOURCE_POINTS, SOURCE_USER, SOURCE_PIN).forEach { id ->
         if (style.getSource(id) == null) style.addSource(GeoJsonSource(id))
     }
 
@@ -779,6 +846,27 @@ private fun installLayers(style: Style) {
             PropertyFactory.circleStrokeWidth(2.5f)
         )
     )
+    // Searched place / alert location pin
+    add(
+        CircleLayer(LAYER_PIN_HALO, SOURCE_PIN).withProperties(
+            PropertyFactory.circleColor("#1C1C1E"),
+            PropertyFactory.circleRadius(15f),
+            PropertyFactory.circleOpacity(0.18f)
+        )
+    )
+    add(
+        CircleLayer(LAYER_PIN, SOURCE_PIN).withProperties(
+            PropertyFactory.circleColor("#1C1C1E"),
+            PropertyFactory.circleRadius(7f),
+            PropertyFactory.circleStrokeColor("#FFFFFF"),
+            PropertyFactory.circleStrokeWidth(3f)
+        )
+    )
+}
+
+private fun updatePin(style: Style, pin: MapPin?) {
+    val features = listOfNotNull(pin?.let { Feature.fromGeometry(Point.fromLngLat(it.longitude, it.latitude)) })
+    style.getSourceAs<GeoJsonSource>(SOURCE_PIN)?.setGeoJson(FeatureCollection.fromFeatures(features))
 }
 
 private fun updateAreas(style: Style, areas: List<RiskArea>, selectedId: String?) {

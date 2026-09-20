@@ -33,9 +33,12 @@ class AlertNotifier @Inject constructor(@ApplicationContext private val context:
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         ensureChannel(manager)
 
+        // A running app receives the tap in MainActivity.onNewIntent (state and map kept);
+        // otherwise the activity is created with the same extras.
         val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            putExtra("alertId", alert.alertId)
+            action = ACTION_OPEN_ALERT
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(EXTRA_ALERT_ID, alert.alertId)
             putExtra("zoneId", alert.zoneId)
             putExtra("zoneName", alert.zoneName)
             putExtra("level", alert.level)
@@ -83,6 +86,9 @@ class AlertNotifier @Inject constructor(@ApplicationContext private val context:
     companion object {
         /** Same channel id the backend targets. */
         const val CHANNEL_ID = "landguard_alerts"
+        const val ACTION_OPEN_ALERT = "com.example.landguard.OPEN_ALERT"
+        /** Same key as the FCM data field, so system-shown notifications deep-link identically. */
+        const val EXTRA_ALERT_ID = "alertId"
         private const val TAG = "LandGuardAlerts"
     }
 }

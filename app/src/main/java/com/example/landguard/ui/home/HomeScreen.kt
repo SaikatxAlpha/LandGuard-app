@@ -99,6 +99,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.example.landguard.ui.risk.RiskAreasViewModel
+import com.example.landguard.ui.risk.AreaDetailContent
+import com.example.landguard.ui.risk.PlaceDetailContent
+import com.example.landguard.ui.risk.nearestArea
+import com.example.landguard.ui.navigation.MapTarget
+import androidx.compose.material.icons.filled.Search
 import com.example.landguard.ui.theme.BgBorder
 import com.example.landguard.ui.theme.BgDeep
 import com.example.landguard.ui.theme.BgElevated
@@ -118,10 +123,11 @@ private const val NEARBY_RADIUS_KM = 75.0
 @Composable
 fun HomeScreen(
     onOpenAlert: (String) -> Unit,
-    onOpenMap: () -> Unit,
+    onOpenMap: (MapTarget?) -> Unit,
     onOpenAlertHistory: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenRiskAreas: () -> Unit = {},
+    onOpenSearch: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
     riskViewModel: RiskAreasViewModel = hiltViewModel()
 ) {
@@ -132,6 +138,7 @@ fun HomeScreen(
     val userLocation = locationState.location
 
     var selectedAreaId by remember { mutableStateOf<String?>(null) }
+    var showMyArea by remember { mutableStateOf(false) }
     var mapStyle by remember { mutableStateOf(RiskMapStyle.STREETS) }
     var panelDismissed by remember { mutableStateOf(false) }
     var threeD by remember { mutableStateOf(true) }
@@ -171,8 +178,22 @@ fun HomeScreen(
     }
 
     fun focusOn(area: RiskArea) {
+        showMyArea = false
         selectedAreaId = area.id
         focus = MapFocus(area.latitude, area.longitude, zoom = 11.5, token = ++focusToken)
+    }
+
+    /** The user's own area: centre on the GPS fix and show every available reading. */
+    fun openMyArea() {
+        val loc = userLocation
+        if (loc == null) {
+            requestLocation()
+            return
+        }
+        selectedAreaId = null
+        showMyArea = true
+        focus = MapFocus(loc.latitude, loc.longitude, 11.0, ++focusToken)
+        riskViewModel.analyzeUserLocation(loc.latitude, loc.longitude)
     }
 
     Box(
@@ -189,8 +210,10 @@ fun HomeScreen(
             onAreaClick = { focusOn(it) },
             onMapBackgroundClick = {
                 selectedAreaId = null
+                showMyArea = false
                 showStyles = false
             },
+            onUserClick = { openMyArea() },
             mapStyle = mapStyle,
             focus = focus,
             fitAll = fitAll,
@@ -223,6 +246,12 @@ fun HomeScreen(
                     modifier = Modifier.pressClickable(onClick = onOpenProfile)
                 )
                 Spacer(Modifier.weight(1f))
+                MapControlButton(
+                    icon = Icons.Filled.Search,
+                    contentDescription = "Search a place",
+                    onClick = onOpenSearch
+                )
+                Spacer(Modifier.width(10.dp))
                 Box {
                     MapControlButton(
                         icon = Icons.Filled.Notifications,
@@ -255,15 +284,7 @@ fun HomeScreen(
             LocationChip(
                 status = locationState.status,
                 placeLabel = locationState.placeLabel,
-                onClick = {
-                    val loc = userLocation
-                    if (loc != null) {
-                        selectedAreaId = null
-                        focus = MapFocus(loc.latitude, loc.longitude, 11.0, ++focusToken)
-                    } else {
-                        requestLocation()
-                    }
-                }
+                onClick = { openMyArea() }
             )
         }
 
@@ -299,6 +320,7 @@ fun HomeScreen(
                         val loc = userLocation
                         if (loc != null) {
                             selectedAreaId = null
+                            showMyArea = false
                             focus = MapFocus(loc.latitude, loc.longitude, 11.0, ++focusToken)
                         } else {
                             requestLocation()
@@ -322,6 +344,7 @@ fun HomeScreen(
                     contentDescription = "Show all areas",
                     onClick = {
                         selectedAreaId = null
+                        showMyArea = false
                         fitAll = MapFitAll(++focusToken)
                     }
                 )
@@ -329,8 +352,10 @@ fun HomeScreen(
         }
 
         // ── Bottom panel ───────────────────────────────────────────────────
+        // The overview rises in after the intro, but a tapped area / the user's own
+        // area is shown immediately — even while the intro is still flying in.
         AnimatedVisibility(
-            visible = introDone,
+            visible = introDone || selectedArea != null || showMyArea,
             enter = slideInVertically(tween(520)) { it } + fadeIn(tween(420)),
             exit = fadeOut(tween(200)),
             modifier = Modifier
@@ -340,6 +365,7 @@ fun HomeScreen(
         ) {
             val panel: HomePanel = when {
                 selectedArea != null -> HomePanel.Detail(selectedArea)
+                showMyArea && userLocation != null -> HomePanel.MyArea
                 panelDismissed -> HomePanel.Collapsed
                 else -> HomePanel.Nearby
             }
@@ -367,8 +393,29 @@ fun HomeScreen(
                         onAreaClick = { focusOn(it) },
                         onSeeAll = onOpenRiskAreas,
                         onOpenAlert = onOpenAlert,
+                        onMyAreaClick = { openMyArea() },
                         onClose = { panelDismissed = true }
                     )
+
+                    HomePanel.MyArea -> {
+                        val loc = userLocation
+                        if (loc != null) {
+                            DetailPanelSurface {
+                                PlaceDetailContent(
+                                    title = locationState.placeLabel ?: "Your GPS position",
+                                    subtitle = "Device location",
+                                    latitude = loc.latitude,
+                                    longitude = loc.longitude,
+                                    isUserLocation = true,
+                                    analysis = userAnalysis,
+                                    nearest = nearestArea(riskState.areas, loc.latitude, loc.longitude),
+                                    onClose = { showMyArea = false },
+                                    onRefresh = { riskViewModel.analyzeUserLocation(loc.latitude, loc.longitude, force = true) },
+                                    onOpenArea = { focusOn(it) }
+                                )
+                            }
+                        }
+                    }
 
                     HomePanel.Collapsed -> Box(
                         modifier = Modifier.fillMaxWidth(),
@@ -382,15 +429,22 @@ fun HomeScreen(
                         )
                     }
 
-                    is HomePanel.Detail -> AreaDetailPanel(
-                        area = target.area,
-                        analysis = areaAnalysis[target.area.id],
-                        userLocation = userLocation,
-                        onClose = { selectedAreaId = null },
-                        onAnalyze = onOpenMap,
-                        onOpenAlert = onOpenAlert,
-                        onOpenAlerts = onOpenAlertHistory
-                    )
+                    is HomePanel.Detail -> DetailPanelSurface {
+                        AreaDetailContent(
+                            area = target.area,
+                            analysis = areaAnalysis[target.area.id],
+                            userLocation = userLocation,
+                            onClose = { selectedAreaId = null },
+                            onRefresh = { riskViewModel.analyzeArea(target.area, force = true) },
+                            primaryActionLabel = "Analyze on map",
+                            onPrimaryAction = {
+                                val area = target.area
+                                onOpenMap(MapTarget(area.id, area.latitude, area.longitude, area.name))
+                            },
+                            onOpenAlert = onOpenAlert,
+                            onOpenAlerts = onOpenAlertHistory
+                        )
+                    }
                 }
             }
         }
@@ -400,7 +454,27 @@ fun HomeScreen(
 private sealed class HomePanel(val key: String) {
     data object Nearby : HomePanel("nearby")
     data object Collapsed : HomePanel("collapsed")
+    data object MyArea : HomePanel("my-area")
     data class Detail(val area: RiskArea) : HomePanel("area:${area.id}")
+}
+
+@Composable
+private fun DetailPanelSurface(content: @Composable () -> Unit) {
+    GlassSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+        shape = RoundedCornerShape(26.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .heightIn(max = 520.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
+        ) {
+            content()
+        }
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════
@@ -523,6 +597,7 @@ private fun NearbyPanel(
     onAreaClick: (RiskArea) -> Unit,
     onSeeAll: () -> Unit,
     onOpenAlert: (String) -> Unit,
+    onMyAreaClick: () -> Unit,
     onClose: () -> Unit
 ) {
     val highestNearby = nearbyAreas.maxByOrNull { it.severity.ordinal }?.severity
@@ -611,7 +686,7 @@ private fun NearbyPanel(
 
             if (userLocation != null) {
                 Spacer(Modifier.height(12.dp))
-                YourLocationRow(userAnalysis, Modifier.padding(horizontal = 16.dp))
+                YourLocationRow(userAnalysis, onClick = onMyAreaClick, modifier = Modifier.padding(horizontal = 16.dp))
             }
 
             if (latestAlert != null) {
@@ -723,132 +798,6 @@ fun RiskScoreBar(score: Int, severity: Severity, modifier: Modifier = Modifier) 
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════
-// SELECTED AREA PANEL
-// ═════════════════════════════════════════════════════════════════════
-
-@Composable
-private fun AreaDetailPanel(
-    area: RiskArea,
-    analysis: AnalysisState?,
-    userLocation: UserLocation?,
-    onClose: () -> Unit,
-    onAnalyze: () -> Unit,
-    onOpenAlert: (String) -> Unit,
-    onOpenAlerts: () -> Unit
-) {
-    GlassSurface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp),
-        shape = RoundedCornerShape(26.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .heightIn(max = 520.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-        ) {
-            Row(verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SeverityPill(area.severity)
-                        userLocation?.let {
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = formatDistance(distanceKm(it, area.latitude, area.longitude)) + " away",
-                                color = TextSecondary,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = area.name,
-                        color = TextPrimary,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(area.historyLine(), color = TextMuted, fontSize = 11.sp, maxLines = 2)
-                }
-                MapControlButton(
-                    icon = Icons.Filled.Close,
-                    contentDescription = "Close",
-                    onClick = onClose,
-                    modifier = Modifier.size(38.dp)
-                )
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MetricTile("${area.score}", "Risk score", Modifier.weight(1f), accent = area.severity.accent)
-                MetricTile("${area.eventCount}", "Recorded slides", Modifier.weight(1f))
-                MetricTile(area.rain72hMm?.let { "%.0f".format(it) } ?: "—", "mm rain / 72 h", Modifier.weight(1f))
-                MetricTile(area.slopeDegrees?.let { "%.0f°".format(it) } ?: "—", "Slope", Modifier.weight(1f))
-            }
-            if (area.rain72hMm == null || area.slopeDegrees == null) {
-                Text(
-                    "— = data unavailable",
-                    color = TextMuted,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-            Text("Latest satellite & live readings", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(6.dp))
-            LiveReadings(state = analysis)
-
-            area.latestAlert?.let { alert ->
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(alert.severity.container)
-                        .pressClickable(pressedScale = 0.98f) { onOpenAlert(alert.id) }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Filled.Warning, null, tint = alert.severity.accent, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = alert.title,
-                        color = TextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(Icons.Filled.ChevronRight, null, tint = TextMuted, modifier = Modifier.size(18.dp))
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PanelButton(
-                    text = "Analyze on map",
-                    primary = true,
-                    onClick = onAnalyze,
-                    modifier = Modifier.weight(1f)
-                )
-                PanelButton(
-                    text = if (area.activeAlertCount > 0) "Alerts (${area.activeAlertCount})" else "Alerts",
-                    primary = false,
-                    onClick = onOpenAlerts,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
 @Composable
 fun PanelButton(
     text: String,
@@ -879,19 +828,20 @@ fun PanelButton(
 // ═════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun YourLocationRow(state: AnalysisState?, modifier: Modifier = Modifier) {
+private fun YourLocationRow(state: AnalysisState?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(BgElevated)
+            .pressClickable(pressedScale = 0.98f, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(Icons.Filled.MyLocation, null, tint = BrandPrimaryLight, modifier = Modifier.size(17.dp))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text("Your location", color = TextSecondary, fontSize = 11.sp)
+            Text("Your area · tap for full details", color = TextSecondary, fontSize = 11.sp)
             when (state) {
                 null, AnalysisState.Loading -> Text(
                     "Fetching latest satellite and rainfall data…",
@@ -913,7 +863,7 @@ private fun YourLocationRow(state: AnalysisState?, modifier: Modifier = Modifier
         when (state) {
             is AnalysisState.Ready -> when (val risk = state.analysis.risk) {
                 is DataResult.Available -> SeverityPill(risk.value.severity)
-                is DataResult.Unavailable -> Text("Risk: data\nunavailable", color = TextMuted, fontSize = 10.sp)
+                is DataResult.Unavailable -> Text("Risk: DATA\nUNAVAILABLE", color = TextMuted, fontSize = 10.sp)
             }
 
             else -> CircularProgressIndicator(color = BrandPrimaryLight, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))

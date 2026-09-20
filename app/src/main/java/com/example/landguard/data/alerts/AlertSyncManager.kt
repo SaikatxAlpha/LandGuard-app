@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.util.Log
 import com.example.landguard.data.network.LandGuardApiService
+import com.example.landguard.data.regional.DataResult
 import com.example.landguard.data.regional.RegionalMonitoringRepository
 import com.example.landguard.domain.service.FcmTokenManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -47,8 +48,22 @@ class AlertSyncManager @Inject constructor(
             override fun onAvailable(network: Network) {
                 Log.i(TAG, "Network available — synchronising with LandGuard backend")
                 requestSync(registerDevice = true)
+                refreshMonitoringIfIncomplete()
             }
         })
+    }
+
+    /** After an offline start, fetch the monitored areas / live conditions that could not be loaded. */
+    private fun refreshMonitoringIfIncomplete() {
+        scope.launch {
+            val catalogMissing = regional.catalog.value is DataResult.Unavailable
+            val conditionsMissing = regional.conditionsSource.value == null
+            if (!catalogMissing && !conditionsMissing) return@launch
+            runCatching {
+                regional.refreshCatalog()
+                regional.refreshConditions()
+            }.onFailure { Log.w(TAG, "Monitoring refresh after reconnect failed: ${it.message}") }
+        }
     }
 
     fun requestSync(registerDevice: Boolean = false) {

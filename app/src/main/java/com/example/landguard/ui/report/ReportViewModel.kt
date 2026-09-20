@@ -18,6 +18,14 @@ data class ReportUiState(
     val errorMessage: String? = null
 )
 
+/** Where the observation was made: the device GPS fix and the nearest monitored area. */
+data class ReportPlace(
+    val latitude: Double?,
+    val longitude: Double?,
+    val zoneId: String?,
+    val zoneName: String?
+)
+
 @HiltViewModel
 class ReportViewModel @Inject constructor(
     private val repository: ReportRepository
@@ -30,11 +38,23 @@ class ReportViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(description = text, errorMessage = null)
     }
 
-    fun submit() {
-        val description = _uiState.value.description
+    fun submit(place: ReportPlace) {
+        val description = _uiState.value.description.trim()
+        if (description.isEmpty()) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Describe what you observed before sending.")
+            return
+        }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSubmitting = true, errorMessage = null)
-            repository.submitObservation(Observation(description = description))
+            repository.submitObservation(
+                Observation(
+                    description = description,
+                    zone = place.zoneId.orEmpty(),
+                    zoneName = place.zoneName.orEmpty(),
+                    latitude = place.latitude,
+                    longitude = place.longitude
+                )
+            )
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(
                         isSubmitting = false,

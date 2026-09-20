@@ -273,7 +273,7 @@ fun ParcelsScreen(
                     Spacer(Modifier.height(12.dp))
 
                     Text(
-                        text = "No parcels found",
+                        text = if (uiState.parcels.isEmpty()) "No parcels registered" else "No parcels found",
                         color = TextPrimary,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
@@ -282,7 +282,8 @@ fun ParcelsScreen(
                     Spacer(Modifier.height(5.dp))
 
                     Text(
-                        text = "Try another search.",
+                        text = if (uiState.parcels.isEmpty()) "Parcel data unavailable — use Risk Areas for monitored land."
+                        else "Try another search.",
                         color = TextSecondary,
                         fontSize = 12.sp
                     )
