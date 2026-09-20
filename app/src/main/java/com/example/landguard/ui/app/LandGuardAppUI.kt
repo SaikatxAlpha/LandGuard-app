@@ -120,6 +120,17 @@ import com.example.landguard.ui.location.hasLocationPermission
 import com.example.landguard.ui.map.MapScreen
 import com.example.landguard.ui.parcels.ParcelsScreen
 import com.example.landguard.ui.risk.RiskAreasScreen
+import com.example.landguard.ui.risk.RiskAreasUiState
+import com.example.landguard.ui.risk.RiskAreasViewModel
+import com.example.landguard.ui.risk.nearestArea
+import com.example.landguard.ui.navigation.MapTarget
+import com.example.landguard.ui.report.ReportPlace
+import com.example.landguard.ui.report.ReportScreen
+import com.example.landguard.di.BackendConfig
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.NotificationsActive
 import com.example.landguard.ui.satellite.SatelliteScreen
 import com.example.landguard.ui.theme.BgBorder
 import com.example.landguard.ui.theme.BgDeep
@@ -157,151 +168,77 @@ private val LandGuardTab.isMapFirst: Boolean
     get() = this == LandGuardTab.HOME || this == LandGuardTab.MAP || this == LandGuardTab.RISK
 
 // ═════════════════════════════════════════════════════════════════════
-// BACKEND CONFIGURATION
-// ═════════════════════════════════════════════════════════════════════
-
-@Composable
-fun BackendSetupScreen(
-    initialUrl: String = "",
-    onUrlSaved: (String) -> Unit
-) {
-    var url by remember { mutableStateOf(initialUrl) }
-    var showError by remember { mutableStateOf(false) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(com.example.landguard.ui.brand.BrandColors.ForestNight)
-    ) {
-        com.example.landguard.ui.brand.TopoContours(
-            modifier = Modifier.fillMaxSize(),
-            centerX = 0.85f,
-            centerY = 0.1f,
-            rings = 8,
-            color = com.example.landguard.ui.brand.BrandColors.Leaf.copy(alpha = 0.09f)
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center
-        ) {
-            com.example.landguard.ui.brand.LandGuardLogo(size = 64.dp)
-            Spacer(Modifier.height(12.dp))
-            com.example.landguard.ui.brand.LandGuardBrandWordmark(fontSize = 30.sp)
-
-            Spacer(Modifier.height(28.dp))
-
-            Text(
-                text = "Connect to your\nLandGuard server",
-                color = com.example.landguard.ui.brand.BrandColors.Mist,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.ExtraBold,
-                lineHeight = 33.sp
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            Text(
-                text = "Developer builds only. Production builds always use https://api.landguard.online/.",
-                color = com.example.landguard.ui.brand.BrandColors.MistMuted,
-                fontSize = 15.sp,
-                lineHeight = 21.sp
-            )
-
-            Spacer(Modifier.height(28.dp))
-
-            OutlinedTextField(
-                value = url,
-                onValueChange = {
-                    url = it
-                    showError = false
-                },
-                label = { Text("Backend URL") },
-                placeholder = { Text("https://your-backend-url.com/") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                isError = showError,
-                shape = RoundedCornerShape(16.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = com.example.landguard.ui.brand.BrandColors.Leaf,
-                    unfocusedBorderColor = com.example.landguard.ui.brand.BrandColors.CardBorder,
-                    focusedContainerColor = com.example.landguard.ui.brand.BrandColors.Card,
-                    unfocusedContainerColor = com.example.landguard.ui.brand.BrandColors.Card,
-                    focusedTextColor = com.example.landguard.ui.brand.BrandColors.Mist,
-                    unfocusedTextColor = com.example.landguard.ui.brand.BrandColors.Mist,
-                    cursorColor = com.example.landguard.ui.brand.BrandColors.Leaf,
-                    focusedLabelColor = com.example.landguard.ui.brand.BrandColors.Leaf,
-                    unfocusedLabelColor = com.example.landguard.ui.brand.BrandColors.MistMuted,
-                    focusedPlaceholderColor = com.example.landguard.ui.brand.BrandColors.MistMuted.copy(alpha = 0.6f),
-                    unfocusedPlaceholderColor = com.example.landguard.ui.brand.BrandColors.MistMuted.copy(alpha = 0.6f),
-                    errorContainerColor = com.example.landguard.ui.brand.BrandColors.Card,
-                    errorTextColor = com.example.landguard.ui.brand.BrandColors.Mist,
-                    errorBorderColor = com.example.landguard.ui.brand.BrandColors.Hazard,
-                    errorLabelColor = com.example.landguard.ui.brand.BrandColors.Hazard,
-                    errorSupportingTextColor = com.example.landguard.ui.brand.BrandColors.Hazard
-                ),
-                supportingText = if (showError) {
-                    { Text("Please enter a valid URL starting with http:// or https://") }
-                } else null
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            com.example.landguard.ui.startup.BrandButton(
-                text = "Connect",
-                onClick = {
-                    var finalUrl = url.trim()
-                    if (finalUrl.isNotBlank() && (finalUrl.startsWith("http://") || finalUrl.startsWith("https://"))) {
-                        if (!finalUrl.endsWith("/")) {
-                            finalUrl += "/"
-                        }
-                        onUrlSaved(finalUrl)
-                    } else {
-                        showError = true
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-}
-
-// ═════════════════════════════════════════════════════════════════════
 // ROOT UI
 // ═════════════════════════════════════════════════════════════════════
 
 @Composable
 fun LandGuardAppUI(
     notificationAlertId: String?,
-    canPromptForLocation: Boolean,
-    onChangeBackendRequest: (() -> Unit)?
+    onNotificationHandled: () -> Unit,
+    canPromptForLocation: Boolean
 ) {
+    val context = LocalContext.current
     var selectedTab by rememberSaveable {
         mutableStateOf(
             if (notificationAlertId != null) LandGuardTab.ALERTS else LandGuardTab.HOME
         )
     }
 
-    var selectedAlert by remember { mutableStateOf<Alert?>(null) }
+    // The open alert is held by id, so its sheet always shows the live stored copy.
+    var selectedAlertId by rememberSaveable { mutableStateOf<String?>(null) }
     var showSatelliteScreen by remember { mutableStateOf(false) }
     var showParcels by remember { mutableStateOf(false) }
+    var showReport by remember { mutableStateOf(false) }
     var notificationsEnabled by rememberSaveable { mutableStateOf(true) }
     var showLocationSheet by remember { mutableStateOf(false) }
-    var notificationHandled by rememberSaveable { mutableStateOf(false) }
+    // Cross-screen "show on map" requests, consumed by the destination screen.
+    var mapTarget by remember { mutableStateOf<MapTarget?>(null) }
+    var riskTarget by remember { mutableStateOf<MapTarget?>(null) }
+    var openMapSearch by remember { mutableStateOf(false) }
+    var missingAlertSyncRequested by remember { mutableStateOf<String?>(null) }
+    var deepLinkShownFor by remember { mutableStateOf<String?>(null) }
 
     val alertsViewModel: AlertHistoryViewModel = hiltViewModel()
     val alerts by alertsViewModel.history.collectAsStateWithLifecycle()
+    // Activity-scoped: the same instance backs Home, Risk Areas, the Map search and More.
+    val riskViewModel: RiskAreasViewModel = hiltViewModel()
+    val riskState by riskViewModel.uiState.collectAsStateWithLifecycle()
 
     val location = rememberUserLocationController(canPromptForLocation)
 
-    BackHandler(enabled = showParcels) { showParcels = false }
-    BackHandler(enabled = !showParcels && selectedTab != LandGuardTab.HOME) {
+    fun openAlert(alertId: String) {
+        if (alerts.any { it.id == alertId }) selectedAlertId = alertId else selectedTab = LandGuardTab.ALERTS
+    }
+
+    fun switchTab(tab: LandGuardTab) {
+        showParcels = false
+        showReport = false
+        selectedTab = tab
+    }
+
+    /*
+     * Notification deep link (cold start or onNewIntent): open that exact alert as soon as
+     * it is in the local store. If it is not there yet, pull it from the backend once.
+     */
+    LaunchedEffect(notificationAlertId, alerts) {
+        val id = notificationAlertId ?: return@LaunchedEffect
+        if (deepLinkShownFor != id) {
+            deepLinkShownFor = id
+            selectedAlertId = null
+            switchTab(LandGuardTab.ALERTS)
+        }
+        if (alerts.any { it.id == id }) {
+            selectedAlertId = id
+            onNotificationHandled()
+        } else if (missingAlertSyncRequested != id) {
+            missingAlertSyncRequested = id
+            alertsViewModel.syncNow()
+        }
+    }
+
+    BackHandler(enabled = showReport) { showReport = false }
+    BackHandler(enabled = !showReport && showParcels) { showParcels = false }
+    BackHandler(enabled = !showReport && !showParcels && selectedTab != LandGuardTab.HOME) {
         selectedTab = LandGuardTab.HOME
     }
 
@@ -331,41 +268,66 @@ fun LandGuardAppUI(
                     when (tab) {
 
                         LandGuardTab.HOME -> HomeScreen(
-                            onOpenAlert = { alertId ->
-                                val alert = alerts.firstOrNull { it.id == alertId }
-                                if (alert != null) selectedAlert = alert else selectedTab = LandGuardTab.ALERTS
+                            onOpenAlert = { openAlert(it) },
+                            onOpenMap = { target ->
+                                mapTarget = target
+                                switchTab(LandGuardTab.MAP)
                             },
-                            onOpenMap = { selectedTab = LandGuardTab.MAP },
-                            onOpenAlertHistory = { selectedTab = LandGuardTab.ALERTS },
-                            onOpenProfile = { selectedTab = LandGuardTab.MORE },
-                            onOpenRiskAreas = { selectedTab = LandGuardTab.RISK }
+                            onOpenAlertHistory = { switchTab(LandGuardTab.ALERTS) },
+                            onOpenProfile = { switchTab(LandGuardTab.MORE) },
+                            onOpenRiskAreas = { switchTab(LandGuardTab.RISK) },
+                            onOpenSearch = {
+                                openMapSearch = true
+                                switchTab(LandGuardTab.MAP)
+                            },
+                            riskViewModel = riskViewModel
                         )
 
-                        // Existing full analysis map — unchanged.
                         LandGuardTab.MAP -> MapScreen(
-                            onOpenZone = { selectedTab = LandGuardTab.RISK }
+                            onOpenZone = { areaId ->
+                                riskTarget = MapTarget(areaId, null, null, null)
+                                switchTab(LandGuardTab.RISK)
+                            },
+                            onOpenAlert = { openAlert(it) },
+                            target = mapTarget,
+                            onTargetConsumed = { mapTarget = null },
+                            openSearch = openMapSearch,
+                            onSearchOpened = { openMapSearch = false },
+                            riskViewModel = riskViewModel
                         )
 
                         LandGuardTab.RISK -> RiskAreasScreen(
-                            onOpenFullMap = { selectedTab = LandGuardTab.MAP },
-                            onOpenAlerts = { selectedTab = LandGuardTab.ALERTS }
+                            onOpenOnMap = { target ->
+                                mapTarget = target
+                                switchTab(LandGuardTab.MAP)
+                            },
+                            onOpenAlerts = { switchTab(LandGuardTab.ALERTS) },
+                            onOpenAlert = { openAlert(it) },
+                            target = riskTarget,
+                            onTargetConsumed = { riskTarget = null },
+                            viewModel = riskViewModel
                         )
 
                         LandGuardTab.ALERTS -> AlertsTabScreen(
                             alerts = alerts,
-                            notificationAlertId = notificationAlertId.takeUnless { notificationHandled },
-                            onNotificationHandled = { notificationHandled = true },
-                            onAlertSelected = { selectedAlert = it }
+                            waitingForAlertId = notificationAlertId,
+                            onAlertSelected = { selectedAlertId = it.id }
                         )
 
                         LandGuardTab.MORE -> MoreTabScreen(
                             notificationsEnabled = notificationsEnabled,
                             locationState = location.state,
+                            serverStatus = serverStatusLine(riskState),
                             onNotificationsChanged = { notificationsEnabled = it },
                             onLocationRequest = { showLocationSheet = true },
                             onOpenParcels = { showParcels = true },
                             onOpenSatellite = { showSatelliteScreen = true },
-                            onChangeBackendRequest = onChangeBackendRequest
+                            onOpenReport = { showReport = true },
+                            onOpenNotificationSettings = { openAppNotificationSettings(context) },
+                            onRetryServer = {
+                                riskViewModel.refresh(force = true)
+                                alertsViewModel.syncNow()
+                            }
                         )
                     }
                 }
@@ -384,10 +346,7 @@ fun LandGuardAppUI(
                         .statusBarsPadding()
                 ) {
                     ParcelsScreen(
-                        onOpenMap = {
-                            showParcels = false
-                            selectedTab = LandGuardTab.MAP
-                        }
+                        onOpenMap = { switchTab(LandGuardTab.MAP) }
                     )
                 }
             }
@@ -395,23 +354,63 @@ fun LandGuardAppUI(
             LandGuardBottomNavigation(
                 selectedTab = selectedTab,
                 alertCount = if (notificationsEnabled) alerts.count { it.status == AlertStatus.NEW } else 0,
-                onTabSelected = {
-                    showParcels = false
-                    selectedTab = it
-                },
+                onTabSelected = { switchTab(it) },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
+
+            // Report an observation (full screen, above the navigation bar)
+            AnimatedVisibility(
+                visible = showReport,
+                enter = slideInHorizontally(tween(280)) { it } + fadeIn(tween(200)),
+                exit = slideOutHorizontally(tween(240)) { it } + fadeOut(tween(200))
+            ) {
+                val loc = location.state.location
+                val nearest = loc?.let { nearestArea(riskState.areas, it.latitude, it.longitude) }
+                    ?.takeIf { it.second <= 25.0 }?.first
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(BgDeep)
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                ) {
+                    ReportScreen(
+                        place = ReportPlace(loc?.latitude, loc?.longitude, nearest?.id, nearest?.name),
+                        placeLabel = location.state.placeLabel,
+                        onClose = { showReport = false },
+                        onSubmitted = {
+                            showReport = false
+                            Toast.makeText(context, "Report sent to LandGuard", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+            }
         }
 
         // ═══════════════════════════════════════════════════════════
         // ALERT DETAIL
         // ═══════════════════════════════════════════════════════════
 
-        selectedAlert?.let { alert ->
-            AlertDetailBottomSheet(
-                alert = alert,
-                onDismiss = { selectedAlert = null }
-            )
+        selectedAlertId?.let { id ->
+            val alert = alerts.firstOrNull { it.id == id }
+            if (alert != null) {
+                AlertDetailBottomSheet(
+                    alert = alert,
+                    onDismiss = { selectedAlertId = null },
+                    onShowOnMap = if (alert.parcelId.isNotBlank() || (alert.latitude != null && alert.longitude != null)) {
+                        {
+                            selectedAlertId = null
+                            riskTarget = MapTarget(
+                                areaId = alert.parcelId.ifBlank { null },
+                                latitude = alert.latitude,
+                                longitude = alert.longitude,
+                                label = alert.affectedLocation.ifBlank { alert.title }
+                            )
+                            switchTab(LandGuardTab.RISK)
+                        }
+                    } else null
+                )
+            }
         }
 
         if (showSatelliteScreen) {
@@ -420,7 +419,7 @@ fun LandGuardAppUI(
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                 containerColor = BgDeep
             ) {
-                SatelliteScreen(onBack = { showSatelliteScreen = false })
+                SatelliteScreen(onBack = { showSatelliteScreen = false }, viewModel = riskViewModel)
             }
         }
 
@@ -439,6 +438,23 @@ fun LandGuardAppUI(
             )
         }
     }
+}
+
+/** Connection to the production LandGuard API, as shown under More. */
+private fun serverStatusLine(state: RiskAreasUiState): String = when {
+    !state.online -> "Offline · ${BackendConfig.host} · cached data only"
+    state.backendReachable == true -> "Connected · ${BackendConfig.host}"
+    state.backendReachable == false -> "Unreachable · ${BackendConfig.host} · public sources in use · tap to retry"
+    else -> "Connecting · ${BackendConfig.host}"
+}
+
+private fun openAppNotificationSettings(context: Context) {
+    val intent = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+    } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+    }
+    runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 // ═════════════════════════════════════════════════════════════════════
@@ -679,29 +695,13 @@ private enum class AlertFilter(val label: String, val severity: Severity?) {
 @Composable
 private fun AlertsTabScreen(
     alerts: List<Alert>,
-    notificationAlertId: String?,
-    onNotificationHandled: () -> Unit,
+    waitingForAlertId: String?,
     onAlertSelected: (Alert) -> Unit
 ) {
     var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
 
     val filteredAlerts = remember(alerts, selectedFilter) {
         selectedFilter.severity?.let { sev -> alerts.filter { it.severity == sev } } ?: alerts
-    }
-
-    /*
-     * FCM notification handling.
-     *
-     * When MainActivity was opened with alertId,
-     * find that exact alert and open it (once).
-     */
-    LaunchedEffect(notificationAlertId, alerts) {
-        if (notificationAlertId != null && alerts.isNotEmpty()) {
-            alerts.firstOrNull { it.id == notificationAlertId }?.let {
-                onNotificationHandled()
-                onAlertSelected(it)
-            }
-        }
     }
 
     Column(
@@ -730,6 +730,31 @@ private fun AlertsTabScreen(
                 color = TextSecondary,
                 fontSize = 12.sp
             )
+
+            // A notification was tapped but its alert is not on this device yet (sync in progress).
+            if (waitingForAlertId != null && alerts.none { it.id == waitingForAlertId }) {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(BrandContainer)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        color = BrandPrimary,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Opening the alert from your notification — fetching it from LandGuard…",
+                        color = TextPrimary,
+                        fontSize = 12.sp
+                    )
+                }
+            }
 
             Spacer(Modifier.height(14.dp))
 
@@ -925,11 +950,14 @@ private fun AlertFilterChip(
 private fun MoreTabScreen(
     notificationsEnabled: Boolean,
     locationState: UserLocationState,
+    serverStatus: String,
     onNotificationsChanged: (Boolean) -> Unit,
     onLocationRequest: () -> Unit,
     onOpenParcels: () -> Unit,
     onOpenSatellite: () -> Unit,
-    onChangeBackendRequest: (() -> Unit)?
+    onOpenReport: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
+    onRetryServer: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -1007,7 +1035,16 @@ private fun MoreTabScreen(
             onClick = onOpenSatellite
         )
 
-        MoreSection("Preferences")
+        MoreSection("Reports")
+
+        MoreRow(
+            icon = Icons.Filled.EditNote,
+            title = "Report an observation",
+            subtitle = "Send a geotagged field report to LandGuard authorities",
+            onClick = onOpenReport
+        )
+
+        MoreSection("Settings")
 
         MoreRow(
             icon = if (notificationsEnabled) Icons.Filled.Notifications else Icons.Filled.NotificationsOff,
@@ -1027,14 +1064,18 @@ private fun MoreTabScreen(
             },
             onClick = onLocationRequest
         )
-        if (onChangeBackendRequest != null) {
-            MoreRow(
-                icon = Icons.Filled.Cloud,
-                title = "Server connection",
-                subtitle = "Developer build · change the LandGuard backend URL",
-                onClick = onChangeBackendRequest
-            )
-        }
+        MoreRow(
+            icon = Icons.Filled.NotificationsActive,
+            title = "Alert notifications",
+            subtitle = "System notification settings for LandGuard alerts",
+            onClick = onOpenNotificationSettings
+        )
+        MoreRow(
+            icon = Icons.Filled.Cloud,
+            title = "LandGuard server",
+            subtitle = serverStatus,
+            onClick = onRetryServer
+        )
     }
 }
 
@@ -1203,7 +1244,8 @@ private fun LocationSheet(
 @Composable
 private fun AlertDetailBottomSheet(
     alert: Alert,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onShowOnMap: (() -> Unit)?
 ) {
     val viewModel: AlertDetailViewModel = hiltViewModel()
     val severityColor = alert.severity.accent
@@ -1273,6 +1315,9 @@ private fun AlertDetailBottomSheet(
                     .padding(horizontal = 14.dp, vertical = 6.dp)
             ) {
                 AlertDetailRow("Location", alert.affectedLocation.ifBlank { "Unknown" })
+                if (alert.latitude != null && alert.longitude != null) {
+                    AlertDetailRow("Coordinates", "%.4f, %.4f".format(java.util.Locale.US, alert.latitude, alert.longitude))
+                }
                 AlertDetailRow("Detected event", alert.detectedEvent.ifBlank { "Land change detected" })
                 if (alert.isDemoData) AlertDetailRow("Confidence", "${alert.confidencePercentage}%")
                 AlertDetailRow("Status", alert.status.name.lowercase().replaceFirstChar { it.uppercase() })
@@ -1293,17 +1338,29 @@ private fun AlertDetailBottomSheet(
                 if (!alert.isDemoData) AlertDetailRow("Alert ID", alert.id)
             }
 
-            if (alert.status == AlertStatus.NEW) {
+            if (alert.status == AlertStatus.NEW || onShowOnMap != null) {
                 Spacer(Modifier.height(18.dp))
-                PanelButton(
-                    text = "Acknowledge alert",
-                    primary = true,
-                    onClick = {
-                        viewModel.updateAlertStatus(alert.id, AlertStatus.ACKNOWLEDGED)
-                        onDismiss()
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (alert.status == AlertStatus.NEW) {
+                        PanelButton(
+                            text = "Acknowledge",
+                            primary = true,
+                            onClick = {
+                                viewModel.updateAlertStatus(alert.id, AlertStatus.ACKNOWLEDGED)
+                                onDismiss()
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (onShowOnMap != null) {
+                        PanelButton(
+                            text = "Show on map",
+                            primary = alert.status != AlertStatus.NEW,
+                            onClick = onShowOnMap,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
         }
     }

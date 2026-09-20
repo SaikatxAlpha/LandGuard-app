@@ -2,7 +2,6 @@ package com.example.landguard.offline
 
 import android.Manifest
 import android.content.Context
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -90,33 +89,12 @@ fun TestMeshScreen(meshManager: NearbyMeshManager, context: Context) {
     val isDiscovering by meshManager.isDiscovering.collectAsState()
     val connectedEndpoints by meshManager.connectedEndpoints.collectAsState()
 
-    val prefs: SharedPreferences = context.getSharedPreferences("LandGuardNetworkPrefs", Context.MODE_PRIVATE)
-    var baseUrl by remember { mutableStateOf(prefs.getString("base_url", "") ?: "") }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
         Text("LandGuard Developer Test", style = MaterialTheme.typography.titleLarge)
-        
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = baseUrl,
-            onValueChange = { baseUrl = it },
-            label = { Text("API Base URL") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Button(
-            onClick = {
-                prefs.edit().putString("base_url", baseUrl).apply()
-                Toast.makeText(context, "Base URL updated. Restart app to re-register.", Toast.LENGTH_SHORT).show()
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Save API URL")
-        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

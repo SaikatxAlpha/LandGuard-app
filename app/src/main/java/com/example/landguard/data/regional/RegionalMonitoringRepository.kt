@@ -54,6 +54,12 @@ interface RegionalMonitoringRepository {
     val hotspotConditions: StateFlow<Map<String, HotspotConditions>>
     val conditionsUpdatedAtMillis: StateFlow<Long?>
 
+    /** Provider of the current area conditions (LandGuard API or Open-Meteo); null when none. */
+    val conditionsSource: StateFlow<String?>
+
+    /** true when the LandGuard API last answered, false when it last failed, null before any attempt. */
+    val backendReachable: StateFlow<Boolean?>
+
     suspend fun refreshCatalog(force: Boolean = false)
     suspend fun refreshConditions(force: Boolean = false)
     suspend fun analyzeLocation(lat: Double, lng: Double, force: Boolean = false): LocationAnalysis
@@ -82,6 +88,12 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
 
     private val _conditionsUpdatedAt = MutableStateFlow<Long?>(null)
     override val conditionsUpdatedAtMillis: StateFlow<Long?> = _conditionsUpdatedAt.asStateFlow()
+
+    private val _conditionsSource = MutableStateFlow<String?>(null)
+    override val conditionsSource: StateFlow<String?> = _conditionsSource.asStateFlow()
+
+    private val _backendReachable = MutableStateFlow<Boolean?>(null)
+    override val backendReachable: StateFlow<Boolean?> = _backendReachable.asStateFlow()
 
     private val catalogMutex = Mutex()
     private val conditionsMutex = Mutex()
@@ -195,7 +207,14 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
         _conditions.value = hotspots.mapIndexed { i, h ->
             h.id to HotspotConditions(rainfall = rainfall?.getOrNull(i), terrain = terrainCache[h.id])
         }.toMap()
-        if (rainfall != null) _conditionsUpdatedAt.value = System.currentTimeMillis()
+        if (rainfall != null) {
+            _conditionsUpdatedAt.value = System.currentTimeMillis()
+            _conditionsSource.value = SOURCE_OPEN_METEO
+        } else if (_conditionsSource.value == SOURCE_BACKEND) {
+            // The backend conditions were replaced by terrain-only data; rainfall is now unavailable.
+            _conditionsSource.value = null
+            _conditionsUpdatedAt.value = null
+        }
     }
 
     override fun hotspotRisk(hotspot: LandslideHotspot, conditions: HotspotConditions?): RiskIndex =
@@ -207,12 +226,14 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
 
     private suspend fun backendCatalog(): CacheRecord? = try {
         val response = api.getMonitoringCatalog()
+        _backendReachable.value = true
         val events = response.events.orEmpty().filter { it.id.isNotBlank() && it.state.isNotBlank() }
         if (events.isEmpty()) null
         else CacheRecord(events, response.sourceUrl ?: "LandGuard backend", response.fetchedAtMillis ?: System.currentTimeMillis())
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
+        _backendReachable.value = false
         Log.w(tag, "Backend catalog unavailable, using public source: ${e.message}")
         null
     }
@@ -220,10 +241,11 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
     /** @return true when the backend supplied conditions and risk for (almost) every area. */
     private suspend fun backendConditions(hotspots: List<LandslideHotspot>): Boolean {
         val response = try {
-            api.getMonitoringZones()
+            api.getMonitoringZones().also { _backendReachable.value = true }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            _backendReachable.value = false
             Log.w(tag, "Backend conditions unavailable, using public sources: ${e.message}")
             return false
         }
@@ -248,6 +270,7 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
             h.id to HotspotConditions(rainfall = z?.rainfall, terrain = z?.terrain ?: terrainCache[h.id])
         }
         _conditionsUpdatedAt.value = AlertContract.parseIso(response.conditions?.observedAt)
+        _conditionsSource.value = SOURCE_BACKEND
         Log.i(tag, "Conditions and risk for $matched areas from the LandGuard backend")
         return true
     }
@@ -306,10 +329,11 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
         }
 
         val fromBackend = try {
-            backendAnalysis(api.getLocationAnalysis(lat, lng), lat, lng)
+            backendAnalysis(api.getLocationAnalysis(lat, lng), lat, lng).also { _backendReachable.value = true }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            _backendReachable.value = false
             Log.w(tag, "Backend analysis unavailable, querying public sources: ${e.message}")
             null
         }
@@ -409,6 +433,9 @@ class RegionalMonitoringRepositoryImpl @Inject constructor(
         private const val ANALYSIS_TTL_MS = 30L * 60 * 1000
         // The backend refreshes on its own cadence; re-reading it is cheap.
         private const val BACKEND_CONDITIONS_TTL_MS = 5L * 60 * 1000
+
+        const val SOURCE_BACKEND = "LandGuard API"
+        const val SOURCE_OPEN_METEO = "Open-Meteo"
 
         const val ALOS4_UNAVAILABLE =
             "No public ALOS-4 PALSAR-3 data service is available to this app. " +

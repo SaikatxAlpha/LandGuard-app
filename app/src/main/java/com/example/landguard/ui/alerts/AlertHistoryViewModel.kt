@@ -8,11 +8,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class AlertHistoryViewModel @Inject constructor(
-    repository: AlertRepository
+    private val repository: AlertRepository
 ) : ViewModel() {
 
     val history: StateFlow<List<Alert>> = repository.observeHistory()
@@ -21,4 +22,9 @@ class AlertHistoryViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    /** Pulls alerts from the LandGuard backend now (e.g. a notification's alert is not on the device yet). */
+    fun syncNow() {
+        viewModelScope.launch { repository.refreshActiveAlerts() }
+    }
 }

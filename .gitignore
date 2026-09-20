@@ -13,3 +13,29 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# ---------------------------------------------------------------------------
+# Release signing material — NEVER commit any of this.
+# ---------------------------------------------------------------------------
+keystore/
+keystore.properties
+signing.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+!keystore.properties.example
+
+# Built artifacts — releases are distributed through GitHub Releases, not git.
+*.apk
+*.aab
+*.apks
+/release/
+/dist/
+
+# Private service credentials (client google-services.json is intentionally tracked)
+*-service-account*.json
+firebase-adminsdk*.json
+google-services-admin.json
+.env
+.env.local

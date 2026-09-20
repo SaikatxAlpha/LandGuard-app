@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -6,6 +9,37 @@ plugins {
     id("com.google.dagger.hilt.android")
     id("com.google.gms.google-services")
 }
+
+/**
+ * Release signing material is resolved without ever appearing in the build script:
+ *
+ *   1. `keystore.properties` at the repository root (git-ignored), or
+ *   2. the LANDGUARD_STORE_FILE / _STORE_PASSWORD / _KEY_ALIAS / _KEY_PASSWORD
+ *      environment variables, for CI.
+ *
+ * If neither is present the release build falls back to the debug key so that a
+ * fresh clone still compiles. Such an APK is not distributable — see
+ * `keystore.properties.example`.
+ */
+val signingProps = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) FileInputStream(file).use { load(it) }
+}
+
+fun signingValue(key: String, env: String): String? =
+    (signingProps.getProperty(key) ?: System.getenv(env))?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingValue("storeFile", "LANDGUARD_STORE_FILE")
+    ?.let { rootProject.file(it) }
+    ?.takeIf { it.exists() }
+val releaseStorePassword = signingValue("storePassword", "LANDGUARD_STORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "LANDGUARD_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "LANDGUARD_KEY_PASSWORD")
+
+val hasReleaseSigning = releaseStoreFile != null &&
+    releaseStorePassword != null &&
+    releaseKeyAlias != null &&
+    releaseKeyPassword != null
 
 android {
     namespace = "com.example.landguard"
@@ -19,6 +53,7 @@ android {
         versionName = "1.2"
 
         // Production LandGuard backend — the same API the authority control center uses.
+        // Every build type uses it; there is no local / LAN / VPN backend and no cleartext HTTP.
         buildConfigField("String", "LANDGUARD_API_BASE_URL", "\"https://api.landguard.online/\"")
         manifestPlaceholders["usesCleartextTraffic"] = "false"
     }
@@ -27,10 +62,44 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = false
+            }
+        }
+    }
+
     buildTypes {
-        release { isMinifyEnabled = false }
-        // Debug builds may point at a local backend over plain HTTP (More → Server connection).
-        debug { manifestPlaceholders["usesCleartextTraffic"] = "true" }
+        release {
+            isMinifyEnabled = false
+            isDebuggable = false
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "LandGuard: no release signing material found — falling back to the debug key. " +
+                        "This APK is NOT distributable. See keystore.properties.example."
+                )
+                signingConfigs.getByName("debug")
+            }
+        }
+    }
+
+    // landguard-1.2-release.apk instead of app-release.apk
+    applicationVariants.all {
+        val variant = this
+        outputs.all {
+            (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.outputFileName =
+                "landguard-${variant.versionName}-${variant.buildType.name}.apk"
+        }
     }
 
     compileOptions {

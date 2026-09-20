@@ -3,6 +3,7 @@ package com.example.landguard.ui.risk
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.landguard.data.network.NetworkMonitor
 import com.example.landguard.data.regional.CatalogSnapshot
 import com.example.landguard.data.regional.DataResult
 import com.example.landguard.data.regional.HotspotConditions
@@ -73,24 +74,52 @@ data class RiskAreasUiState(
     val catalogFetchedAtMillis: Long? = null,
     val catalogFromCache: Boolean = false,
     val conditionsUpdatedAtMillis: Long? = null,
-    val statesCovered: List<Pair<String, Int>> = emptyList()
+    val conditionsSource: String? = null,
+    val statesCovered: List<Pair<String, Int>> = emptyList(),
+    val online: Boolean = true,
+    val backendReachable: Boolean? = null
 ) {
     fun countFor(severity: Severity) = areas.count { it.severity == severity }
+
+    /** LIVE / CACHED / OFFLINE / DATA UNAVAILABLE with source and timestamp. */
+    val dataStatus: DataStatus
+        get() = monitoringStatus(
+            isLoading = isLoading,
+            catalogError = catalogError,
+            fromCache = catalogFromCache,
+            fetchedAtMillis = catalogFetchedAtMillis,
+            online = online,
+            backendReachable = backendReachable,
+            conditionsAtMillis = conditionsUpdatedAtMillis,
+            conditionsSource = conditionsSource
+        )
 }
+
+private data class Connection(val online: Boolean, val backendReachable: Boolean?, val conditionsSource: String?)
 
 @HiltViewModel
 class RiskAreasViewModel @Inject constructor(
     private val regional: RegionalMonitoringRepository,
-    alertRepository: AlertRepository
+    alertRepository: AlertRepository,
+    network: NetworkMonitor
 ) : ViewModel() {
 
     val uiState: StateFlow<RiskAreasUiState> = combine(
-        regional.catalog,
-        regional.hotspotConditions,
-        regional.conditionsUpdatedAtMillis,
-        alertRepository.observeHistory().catch { emit(emptyList()) }
-    ) { catalog, conditions, conditionsAt, alerts ->
-        buildState(catalog, conditions, conditionsAt, alerts)
+        combine(
+            regional.catalog,
+            regional.hotspotConditions,
+            regional.conditionsUpdatedAtMillis,
+            alertRepository.observeHistory().catch { emit(emptyList()) }
+        ) { catalog, conditions, conditionsAt, alerts ->
+            buildState(catalog, conditions, conditionsAt, alerts)
+        },
+        combine(network.online, regional.backendReachable, regional.conditionsSource, ::Connection)
+    ) { state, connection ->
+        state.copy(
+            online = connection.online,
+            backendReachable = connection.backendReachable,
+            conditionsSource = connection.conditionsSource
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -131,12 +160,21 @@ class RiskAreasViewModel @Inject constructor(
         }
     }
 
-    fun analyzeArea(area: RiskArea, force: Boolean = false) {
-        if (!force && _areaAnalysis.value[area.id] != null) return
-        _areaAnalysis.value = _areaAnalysis.value + (area.id to AnalysisState.Loading)
+    fun analyzeArea(area: RiskArea, force: Boolean = false) = analyzePoint(area.id, area.latitude, area.longitude, force)
+
+    /**
+     * Real-data analysis of any point (monitored area, searched place, alert location),
+     * cached per [key]. Results are shown via [areaAnalysis].
+     */
+    fun analyzePoint(key: String, lat: Double, lng: Double, force: Boolean = false) {
+        val existing = _areaAnalysis.value[key]
+        if (!force && existing != null) return
+        if (existing == AnalysisState.Loading) return
+        _areaAnalysis.value = _areaAnalysis.value + (key to AnalysisState.Loading)
         viewModelScope.launch {
-            val result = regional.analyzeLocation(area.latitude, area.longitude, force)
-            _areaAnalysis.value = _areaAnalysis.value + (area.id to AnalysisState.Ready(result))
+            regional.refreshCatalog()
+            val result = regional.analyzeLocation(lat, lng, force)
+            _areaAnalysis.value = _areaAnalysis.value + (key to AnalysisState.Ready(result))
         }
     }
 

@@ -1,6 +1,7 @@
 package com.example.landguard
 
 import android.Manifest
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,20 +11,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.landguard.data.alerts.AlertSyncManager
 import com.example.landguard.data.alerts.ReceiptSender
 import com.example.landguard.data.repository.AlertRepository
-import com.example.landguard.di.BackendConfig
 import com.example.landguard.offline.NearbyMeshManager
-import com.example.landguard.ui.app.BackendSetupScreen
+import com.example.landguard.service.AlertNotifier
 import com.example.landguard.ui.app.LandGuardAppUI
 import com.example.landguard.ui.brand.SystemBarIcons
 import com.example.landguard.ui.startup.LandGuardStartup
 import com.example.landguard.ui.theme.LandGuardTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -44,6 +44,9 @@ class MainActivity : ComponentActivity() {
      * resolved (or not needed), so the location prompt is never launched on top of them.
      */
     private val startupPromptsSettled = mutableStateOf(false)
+
+    /** Alert to open from a notification tap (cold start or while running); cleared once shown. */
+    private val pendingAlertId = MutableStateFlow<String?>(null)
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -67,49 +70,46 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
 
-        // Opened from an alert notification: tell the authority the alert was seen.
-        val alertId = intent.getStringExtra("alertId")
-        if (alertId != null) {
-            lifecycleScope.launch {
-                alertRepository.getAlertById(alertId)?.let {
-                    receipts.send(alertId, "opened", it.receivedVia.ifBlank { "fcm" }, it.hopCount)
-                }
-            }
-        }
-
-        val sharedPrefs = getSharedPreferences(BackendConfig.PREFS_NAME, MODE_PRIVATE)
+        // A recreated activity (rotation, process restore) must not re-open the same alert.
+        val openedFromAlert = savedInstanceState == null && handleAlertIntent(intent)
 
         setContent {
             LandGuardTheme {
                 LandGuardStartup(
-                    skipIntro = alertId != null,
+                    skipIntro = openedFromAlert,
                     onEnteredApp = { requestNotificationPermissionIfNeeded() }
                 ) {
-                    // Production backend by default; debug builds can point elsewhere from More.
-                    var showBackendSetup by remember { mutableStateOf(false) }
-
-                    // Server setup keeps the dark brand look; the main app is light.
-                    SystemBarIcons(darkIcons = !showBackendSetup)
-
-                    if (showBackendSetup) {
-                        BackendSetupScreen(
-                            initialUrl = BackendConfig.baseUrl(sharedPrefs),
-                            onUrlSaved = { url ->
-                                sharedPrefs.edit().putString(BackendConfig.KEY_BASE_URL, url).apply()
-                                showBackendSetup = false
-                                alertSync.requestSync(registerDevice = true)
-                            }
-                        )
-                    } else {
-                        LandGuardAppUI(
-                            notificationAlertId = alertId,
-                            canPromptForLocation = startupPromptsSettled.value,
-                            onChangeBackendRequest = if (BuildConfig.DEBUG) ({ showBackendSetup = true }) else null
-                        )
-                    }
+                    val notificationAlertId by pendingAlertId.collectAsStateWithLifecycle()
+                    SystemBarIcons(darkIcons = true)
+                    LandGuardAppUI(
+                        notificationAlertId = notificationAlertId,
+                        onNotificationHandled = { pendingAlertId.value = null },
+                        canPromptForLocation = startupPromptsSettled.value
+                    )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAlertIntent(intent)
+    }
+
+    /**
+     * Opened from an alert notification (ours, or one shown by the system from an FCM
+     * payload — both carry the same alertId): show that alert and tell the authority it was seen.
+     */
+    private fun handleAlertIntent(intent: Intent?): Boolean {
+        val alertId = intent?.getStringExtra(AlertNotifier.EXTRA_ALERT_ID)?.takeIf { it.isNotBlank() } ?: return false
+        pendingAlertId.value = alertId
+        lifecycleScope.launch {
+            alertRepository.getAlertById(alertId)?.let {
+                receipts.send(alertId, "opened", it.receivedVia.ifBlank { "fcm" }, it.hopCount)
+            }
+        }
+        return true
     }
 
     override fun onResume() {

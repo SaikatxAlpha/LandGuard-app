@@ -62,6 +62,15 @@ data class CatalogResponse(
     val events: List<LandslideEvent>?
 )
 
+/** Ground observation for the authority "Field reports" page (POST /reports). */
+data class FieldReportRequest(
+    val zoneId: String?,
+    val zoneName: String?,
+    val note: String,
+    val lat: Double?,
+    val lng: Double?
+)
+
 interface LandGuardApiService {
     /** Public alerts, optionally only those changed since [updatedSince] (ISO-8601). */
     @GET("alerts")
@@ -78,6 +87,9 @@ interface LandGuardApiService {
 
     @POST("devices")
     suspend fun registerDevice(@Body body: DeviceRegisterRequest): Response<ResponseBody>
+
+    @POST("reports")
+    suspend fun submitReport(@Body body: FieldReportRequest): Response<ResponseBody>
 
     @GET("monitoring/catalog")
     suspend fun getMonitoringCatalog(): CatalogResponse
