@@ -96,12 +96,17 @@ class AlertSyncManager @Inject constructor(
                 else if (alert.status != "active") ingestor.applyStatus(alert.alertId, alert.status)
             }
             prefs.edit().putLong(KEY_LAST_SYNC, startedAt).apply()
-            receipts.flush()
             Log.i(TAG, "Alert sync complete: ${alerts.size} changed, $added new")
             Result.success(added)
         } catch (e: Exception) {
             Log.w(TAG, "Alert sync failed (offline?): ${e.message}")
             Result.failure(e)
+        } finally {
+            // Independent of the alert fetch: a phone that only ever received an
+            // alert over the mesh has receipts queued for the authority, and they
+            // must reach the backend even if this fetch failed. Without this they
+            // stayed on disk and the control center kept showing "offline mesh 0".
+            receipts.flush()
         }
     }
 

@@ -20,7 +20,16 @@ import com.google.android.gms.nearby.connection.Payload
 import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.nearby.connection.ConnectionsStatusCodes
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,6 +37,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.nio.charset.StandardCharsets
+import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,6 +56,12 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
     private val SERVICE_ID = context.packageName
     private val STRATEGY = Strategy.P2P_CLUSTER
     private val TAG = "LandGuardMesh"
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var watchdog: Job? = null
+
+    /** Endpoints with a connection request in flight (see [requestConnection]). */
+    private val pendingEndpoints: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
 
     private val _connectedEndpoints = MutableStateFlow<Set<String>>(emptySet())
     val connectedEndpoints: StateFlow<Set<String>> = _connectedEndpoints.asStateFlow()
@@ -66,17 +82,44 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-            Log.i(TAG, "Endpoint discovered: $endpointId")
-            try {
-                connectionsClient.requestConnection(Build.MODEL, endpointId, connectionLifecycleCallback)
-                    .addOnFailureListener { e -> Log.w(TAG, "Connection request to $endpointId failed: ${e.message}") }
-            } catch (e: Exception) {
-                Log.e(TAG, "Exception requesting connection", e)
-            }
+            Log.i(TAG, "Endpoint discovered: $endpointId (${info.endpointName})")
+            requestConnection(endpointId)
         }
 
         override fun onEndpointLost(endpointId: String) {
             Log.i(TAG, "Endpoint lost: $endpointId")
+            pendingEndpoints.remove(endpointId)
+        }
+    }
+
+    /**
+     * Both devices advertise and discover under P2P_CLUSTER, so the same pair can
+     * try to connect from both sides at once. Requests are de-duplicated per
+     * endpoint so discovery re-emissions do not spam Nearby, and the marker is
+     * cleared on any terminal outcome so a lost peer can be picked up again.
+     */
+    private fun requestConnection(endpointId: String) {
+        if (endpointId in _connectedEndpoints.value) return
+        if (!pendingEndpoints.add(endpointId)) return
+        try {
+            connectionsClient.requestConnection(Build.MODEL, endpointId, connectionLifecycleCallback)
+                .addOnFailureListener { e ->
+                    pendingEndpoints.remove(endpointId)
+                    when (e.statusCode()) {
+                        ConnectionsStatusCodes.STATUS_ALREADY_CONNECTED_TO_ENDPOINT -> {
+                            Log.i(TAG, "Already connected to $endpointId")
+                            _connectedEndpoints.value = _connectedEndpoints.value + endpointId
+                            _peerConnected.tryEmit(endpointId)
+                        }
+                        // The other side won the collision; its request will arrive instead.
+                        ConnectionsStatusCodes.STATUS_OUT_OF_ORDER_API_CALL ->
+                            Log.i(TAG, "Connection to $endpointId already in progress from the other side")
+                        else -> Log.w(TAG, "Connection request to $endpointId failed (${e.statusCode()}): ${e.message}")
+                    }
+                }
+        } catch (e: Exception) {
+            pendingEndpoints.remove(endpointId)
+            Log.e(TAG, "Exception requesting connection", e)
         }
     }
 
@@ -91,9 +134,11 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
         }
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
+            pendingEndpoints.remove(endpointId)
             if (result.status.isSuccess) {
                 Log.i(TAG, "Connection established with $endpointId")
                 _connectedEndpoints.value = _connectedEndpoints.value + endpointId
+                // Drives store-and-forward: the peer gets every alert it may have missed.
                 _peerConnected.tryEmit(endpointId)
             } else {
                 Log.w(TAG, "Connection failed with $endpointId: ${result.status.statusCode}")
@@ -103,6 +148,9 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
         override fun onDisconnected(endpointId: String) {
             Log.i(TAG, "Connection disconnected: $endpointId")
             _connectedEndpoints.value = _connectedEndpoints.value - endpointId
+            pendingEndpoints.remove(endpointId)
+            // Discovery keeps running, so a peer that comes back in range is
+            // rediscovered and reconnected without any user action.
         }
     }
 
@@ -126,31 +174,63 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) = Unit
     }
 
-    /** Runtime permissions Nearby Connections needs on this Android version. */
+    /**
+     * Runtime permissions Nearby Connections needs on this Android version.
+     *
+     * ACCESS_FINE_LOCATION is required all the way up to API 32: the Wi-Fi and
+     * BLE discovery mediums are location-derived, and BLUETOOTH_SCAN is not
+     * declared `neverForLocation`. Only on API 33+ does NEARBY_WIFI_DEVICES
+     * replace it. Dropping it below 33 makes startDiscovery fail with
+     * MISSING_PERMISSION_ACCESS_FINE_LOCATION (8034).
+     */
     fun requiredPermissions(): List<String> = buildList {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             add(Manifest.permission.BLUETOOTH_ADVERTISE)
             add(Manifest.permission.BLUETOOTH_CONNECT)
             add(Manifest.permission.BLUETOOTH_SCAN)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(Manifest.permission.NEARBY_WIFI_DEVICES)
         } else {
             add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.NEARBY_WIFI_DEVICES)
     }
 
     fun missingPermissions(): List<String> = requiredPermissions().filter {
         ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
     }
 
+    fun hasAllPermissions(): Boolean = missingPermissions().isEmpty()
+
     /** Starts advertising + discovery once the permissions are granted; safe to call repeatedly. */
     fun startIfPermitted(): Boolean {
-        if (missingPermissions().isNotEmpty()) {
-            Log.i(TAG, "Offline mesh waiting for permissions: ${missingPermissions()}")
+        val missing = missingPermissions()
+        if (missing.isNotEmpty()) {
+            Log.w(TAG, "Offline mesh cannot start — permissions not granted: $missing")
             return false
         }
         startAdvertising()
         startDiscovery()
+        startWatchdog()
         return true
+    }
+
+    /**
+     * Keeps the mesh up for as long as the process lives. Nearby stops
+     * advertising/discovery on its own after Bluetooth toggles, airplane mode or
+     * a GMS restart, and reports no callback when it does — so the state is
+     * re-asserted periodically instead of only at app launch.
+     */
+    private fun startWatchdog() {
+        if (watchdog?.isActive == true) return
+        watchdog = scope.launch {
+            while (isActive) {
+                delay(WATCHDOG_INTERVAL_MS)
+                if (!hasAllPermissions()) continue
+                if (!_isAdvertising.value) startAdvertising()
+                if (!_isDiscovering.value) startDiscovery()
+            }
+        }
     }
 
     fun startAdvertising() {
@@ -162,8 +242,18 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
                     Log.i(TAG, "Advertising started")
                     _isAdvertising.value = true
                 }
-                .addOnFailureListener { e -> Log.e(TAG, "Failed to start advertising", e) }
+                .addOnFailureListener { e ->
+                    // Already advertising is a success for our purposes: the mesh is live.
+                    if (e.statusCode() == ConnectionsStatusCodes.STATUS_ALREADY_ADVERTISING) {
+                        Log.i(TAG, "Advertising already active")
+                        _isAdvertising.value = true
+                    } else {
+                        _isAdvertising.value = false
+                        Log.e(TAG, "Failed to start advertising (${e.statusCode()}) — retrying via watchdog", e)
+                    }
+                }
         } catch (e: Exception) {
+            _isAdvertising.value = false
             Log.e(TAG, "Exception starting advertising", e)
         }
     }
@@ -186,11 +276,22 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
                     Log.i(TAG, "Discovery started")
                     _isDiscovering.value = true
                 }
-                .addOnFailureListener { e -> Log.e(TAG, "Failed to start discovery", e) }
+                .addOnFailureListener { e ->
+                    if (e.statusCode() == ConnectionsStatusCodes.STATUS_ALREADY_DISCOVERING) {
+                        Log.i(TAG, "Discovery already active")
+                        _isDiscovering.value = true
+                    } else {
+                        _isDiscovering.value = false
+                        Log.e(TAG, "Failed to start discovery (${e.statusCode()}) — retrying via watchdog", e)
+                    }
+                }
         } catch (e: Exception) {
+            _isDiscovering.value = false
             Log.e(TAG, "Exception starting discovery", e)
         }
     }
+
+    private fun Exception.statusCode(): Int = (this as? ApiException)?.statusCode ?: -1
 
     fun stopDiscovery() {
         try {
@@ -231,14 +332,27 @@ class NearbyMeshManager @Inject constructor(@ApplicationContext private val cont
         }
     }
 
+    /**
+     * Tears the mesh down completely. Only the mesh foreground service calls
+     * this — the UI must not, or closing the app would take the offline
+     * disaster channel down with it.
+     */
     fun stopAll() {
         try {
+            watchdog?.cancel()
+            watchdog = null
             connectionsClient.stopAllEndpoints()
             _connectedEndpoints.value = emptySet()
+            pendingEndpoints.clear()
             stopAdvertising()
             stopDiscovery()
+            Log.i(TAG, "Offline mesh stopped")
         } catch (e: Exception) {
             Log.e(TAG, "Exception stopping all", e)
         }
+    }
+
+    private companion object {
+        const val WATCHDOG_INTERVAL_MS = 20_000L
     }
 }

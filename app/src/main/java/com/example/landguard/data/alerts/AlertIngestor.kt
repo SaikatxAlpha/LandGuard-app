@@ -90,8 +90,18 @@ class AlertIngestor @Inject constructor(
 
     private fun relay(alert: AlertDto, excludeEndpointId: String?) {
         val next = alert.copy(hopCount = alert.hopCount + 1, originDeviceId = android.os.Build.MODEL)
-        if (!next.isRelayable()) return
-        mesh.relay(next, excludeEndpointId)
+        if (!next.isRelayable()) {
+            Log.i(
+                TAG,
+                "Not relaying ${alert.alertId}: status=${next.status} expired=${next.isExpired()} " +
+                    "hop=${next.hopCount}/${AlertContract.MAX_MESH_HOPS}"
+            )
+            return
+        }
+        // Peers connected right now get it immediately; a peer that connects
+        // later picks it up through store-and-forward (forwardActiveAlertsTo).
+        val peers = mesh.relay(next, excludeEndpointId)
+        Log.i(TAG, "Relayed ${alert.alertId} to $peers peer(s) at hop ${next.hopCount}")
     }
 
     /** Store-and-forward: a newly connected peer receives every alert that is still valid. */

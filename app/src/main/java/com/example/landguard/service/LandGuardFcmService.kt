@@ -6,6 +6,7 @@ import com.example.landguard.data.alerts.AlertContract
 import com.example.landguard.data.alerts.AlertIngestor
 import com.example.landguard.data.alerts.AlertSyncManager
 import com.example.landguard.domain.service.FcmTokenManager
+import com.example.landguard.offline.MeshService
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
@@ -48,6 +49,15 @@ class LandGuardFcmService : FirebaseMessagingService() {
                     Log.w(TAG, "Ignoring FCM message that is not a valid LandGuard alert")
                     return
                 }
+                // Bring the offline mesh up before ingesting, so this phone is
+                // already advertising when nearby phones without internet come
+                // into range. A high-priority FCM message is one of the cases
+                // where Android 12+ allows starting a foreground service from
+                // the background. The alert is persisted either way, and the
+                // relay happens as soon as a peer connects — a peer does not
+                // have to be connected at the instant the alert arrives.
+                MeshService.ensureRunning(applicationContext)
+
                 // Persist before returning: the process may be stopped right after this callback.
                 runBlocking {
                     withTimeoutOrNull(8_000) { ingestor.ingest(alert, AlertChannel.FCM) }

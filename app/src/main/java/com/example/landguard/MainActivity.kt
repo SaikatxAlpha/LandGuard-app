@@ -16,6 +16,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.landguard.data.alerts.AlertSyncManager
 import com.example.landguard.data.alerts.ReceiptSender
 import com.example.landguard.data.repository.AlertRepository
+import com.example.landguard.offline.MeshService
 import com.example.landguard.offline.NearbyMeshManager
 import com.example.landguard.service.AlertNotifier
 import com.example.landguard.ui.app.LandGuardAppUI
@@ -57,8 +58,19 @@ class MainActivity : ComponentActivity() {
 
     private val meshPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        meshManager.startIfPermitted()
+    ) { results ->
+        val denied = results.filterValues { !it }.keys
+        if (denied.isEmpty()) {
+            MeshService.ensureRunning(this)
+        } else {
+            // Without these the offline channel cannot run at all; the alert
+            // pipeline keeps working over FCM and sync.
+            android.util.Log.w(
+                "LandGuardMesh",
+                "Offline mesh disabled — permissions denied: $denied. " +
+                    "Grant them in Settings › Apps › LandGuard › Permissions to relay alerts without internet."
+            )
+        }
         startupPromptsSettled.value = true
     }
 
@@ -116,7 +128,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Starts the offline mesh as soon as its permissions are available, and
         // catches up on anything missed while the app was in the background.
-        meshManager.startIfPermitted()
+        MeshService.ensureRunning(this)
         alertSync.requestSync()
     }
 
@@ -135,21 +147,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Bluetooth / nearby-Wi-Fi access for the offline alert mesh (location is asked for by the map). */
+    /**
+     * Bluetooth, nearby-Wi-Fi and — below API 33 — fine location for the offline
+     * alert mesh.
+     *
+     * Location used to be filtered out here on the assumption that the map would
+     * ask for it. On API 24–30 it is the *only* permission Nearby needs, so the
+     * filtered list came back empty, the prompt never appeared, and
+     * startIfPermitted() then refused to start because the permission was still
+     * missing — the mesh could never come up. Every permission Nearby actually
+     * needs is requested here.
+     */
     private fun requestMeshPermissionsIfNeeded() {
-        val missing = meshManager.missingPermissions().filterNot {
-            it == Manifest.permission.ACCESS_FINE_LOCATION || it == Manifest.permission.ACCESS_COARSE_LOCATION
-        }
+        val missing = meshManager.missingPermissions()
         if (missing.isEmpty()) {
-            meshManager.startIfPermitted()
+            MeshService.ensureRunning(this)
             startupPromptsSettled.value = true
         } else {
             meshPermissionLauncher.launch(missing.toTypedArray())
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        if (isFinishing && ::meshManager.isInitialized) meshManager.stopAll()
-    }
+    // The mesh deliberately outlives this Activity: it is owned by MeshService so
+    // alerts still relay with the app closed and the screen off.
 }
