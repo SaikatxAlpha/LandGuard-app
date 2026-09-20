@@ -98,7 +98,7 @@ Every screen listed below is a real, shipping screen in the release build.
 
 <div align="center">
 
-### [⬇️ Download Latest APK](https://github.com/SaikatxAlpha/LandGuard-app/releases/latest)
+### [ Download Latest APK](https://github.com/SaikatxAlpha/LandGuard-app/releases/latest)
 
 </div>
 
@@ -114,7 +114,7 @@ sideloaded builds.
 |---|---|
 | **Artifact** | `landguard-1.2-release.apk` |
 | **Application ID** | `com.example.landguard` |
-| **Version** | 1.2 (versionCode 3) |
+| **Version** | 1.0.1 (versionCode 3) |
 | **Signing** | v2 + v3 APK Signature Scheme, RSA 4096 release key |
 | **Requires** | Android 7.0 Nougat (API 24) or newer |
 | **Backend** | `https://api.landguard.online/` — pre-configured, nothing to enter |
@@ -324,7 +324,7 @@ risk picture in front of them is.
 ### From a release (recommended)
 
 1. Open **[Releases → Latest](https://github.com/SaikatxAlpha/LandGuard-app/releases/latest)**
-2. Download `landguard-1.2-release.apk`
+2. Download `landguard-1.0.1-release.apk`
 3. Allow installation from your browser / file manager when prompted
 4. Launch **LandGuard** — grant location and notification access when asked
 
